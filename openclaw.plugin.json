@@ -1,0 +1,24 @@
+{
+  "id": "ppq-private-mode",
+  "name": "PPQ Private Mode",
+  "description": "End-to-end encrypted AI inference via PPQ.AI. Runs a local proxy that encrypts your queries before they leave your machine.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "apiKey": { "type": "string" },
+      "port": { "type": "number" },
+      "apiBase": { "type": "string" },
+      "debug": { "type": "boolean" }
+    },
+    "required": ["apiKey"]
+  },
+  "uiHints": {
+    "apiKey": { "label": "PPQ.AI API Key", "sensitive": true },
+    "port": { "label": "Local Port", "placeholder": "8787" },
+    "apiBase": { "label": "PPQ API Base URL", "placeholder": "https://api.ppq.ai" },
+    "debug": { "label": "Debug Logging" }
+  },
+  "skills": ["./skills/private-autoclaw"]
+}
