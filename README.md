@@ -1,82 +1,79 @@
-# PPQ Private Mode Proxy
+# PPQ.AI Private Mode — End-to-End Encrypted AI for OpenClaw
 
-End-to-end encrypted AI proxy for PPQ.AI's private models. Your queries are encrypted on your machine and only decrypted inside a hardware-secured enclave — neither PPQ.AI nor any intermediary can read them.
+> Your queries are encrypted on your machine and only decrypted inside a hardware-secured enclave. Neither PPQ.AI nor any intermediary can read the content.
 
-Works **standalone** (any app, any language) or as an **OpenClaw plugin**.
+## Setup Instructions
 
-## Quick Start (Standalone)
+Follow these steps in order. Ask the user for their PPQ API key when needed.
 
-```bash
-git clone https://github.com/PayPerQ/ppq-private-mode-proxy.git
-cd ppq-private-mode-proxy
-npm install
-PPQ_API_KEY=sk-your-key npm start
-```
+### Step 1: Get the user's PPQ API key
 
-The proxy starts on `http://127.0.0.1:8787` and exposes an OpenAI-compatible API.
+Ask the user for their PPQ.AI API key. They can find it at https://ppq.ai/api-docs — it starts with `sk-`.
 
-### Send a request
+### Step 2: Install the plugin
+
+Run this command to install the PPQ Private Mode plugin:
 
 ```bash
-curl http://127.0.0.1:8787/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "private/kimi-k2-5",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'
+openclaw plugins install https://github.com/PayPerQ/ppq-private-mode-proxy
 ```
 
-### Use with any OpenAI-compatible client
+Then fix a missing peer dependency that the plugin requires:
 
-```python
-from openai import OpenAI
-
-client = OpenAI(base_url="http://127.0.0.1:8787/v1", api_key="unused")
-response = client.chat.completions.create(
-    model="private/kimi-k2-5",
-    messages=[{"role": "user", "content": "Hello!"}]
-)
-print(response.choices[0].message.content)
+```bash
+npm install zod@^4 --prefix ~/.openclaw/extensions/ppq-private-mode
 ```
 
-## Available Models
+### Step 3: Add the plugin config to OpenClaw
 
-| Model | Best For |
-|-------|----------|
-| `private/kimi-k2-5` | Fast general tasks, 262K context |
-| `private/deepseek-r1-0528` | Reasoning & analysis |
-| `private/gpt-oss-120b` | Cost-efficient general use |
-| `private/llama3-3-70b` | Open-source tasks |
-| `private/qwen3-vl-30b` | Vision + text, 262K context |
-| `autoclaw/private` | Smart routing — auto-picks the best model |
+Add the following to the user's `~/.openclaw/openclaw.json` file. If the file already has content, merge these fields into the existing config — do not overwrite existing settings.
 
-## Environment Variables
+```json
+{
+  "plugins": {
+    "entries": {
+      "ppq-private-mode": {
+        "config": {
+          "apiKey": "<USER'S API KEY HERE>"
+        }
+      }
+    }
+  }
+}
+```
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `PPQ_API_KEY` | Yes | — | Your PPQ.AI API key from [ppq.ai/api-docs](https://ppq.ai/api-docs) |
-| `PORT` | No | `8787` | Local proxy port |
-| `PPQ_API_BASE` | No | `https://api.ppq.ai` | PPQ API base URL |
-| `DEBUG` | No | `false` | Set to `true` for verbose logging |
+Replace `<USER'S API KEY HERE>` with the actual API key the user provided.
 
-## OpenClaw Plugin Usage
+### Step 4: Restart the gateway
 
-See [SKILL.md](./skills/private-autoclaw/SKILL.md) for OpenClaw-specific setup, or read the [blog post](https://ppq.ai/blog/using-tee-models-with-openclaw).
+```bash
+systemctl --user restart openclaw-gateway.service
+```
 
-## How It Works
+### Step 5: Confirm to the user
 
-1. On startup, the proxy performs **hardware attestation** — verifying the remote server is a genuine secure enclave
-2. For each request, it **encrypts the body** using HPKE (RFC 9180) with the enclave's attested public key
-3. The encrypted request passes through PPQ.AI (which cannot read it) to the secure enclave
-4. The enclave decrypts, runs inference, encrypts the response
-5. The proxy decrypts and streams the response back to you
+Tell the user that PPQ Private Mode is now installed. Let them know:
+
+- **How it works**: A local proxy runs on their machine that encrypts every AI query before it leaves their device. The proxy performs hardware attestation to verify it's talking to a real secure enclave.
+- **Available models**: They can now use any of these end-to-end encrypted models:
+  - `private/kimi-k2-5` — Fast general tasks, 262K context
+  - `private/deepseek-r1-0528` — Reasoning & analysis
+  - `private/gpt-oss-120b` — Cost-efficient general use
+  - `private/llama3-3-70b` — Open-source tasks
+  - `private/qwen3-vl-30b` — Vision + text, 262K context
+  - `autoclaw/private` — Smart routing that auto-picks the best private model
+- **To switch models**: `openclaw models set autoclaw/private` (or any model above)
+- **To check status**: Use the `ppq_private_mode_status` tool to verify the proxy is running and attestation succeeded
 
 ## Troubleshooting
 
-- **"Protocol error"**: Usually an auth or balance issue. Check your API key and balance at [ppq.ai](https://ppq.ai)
-- **Attestation failed**: The secure enclave may be temporarily unavailable. Try again in a few minutes.
-- **Port conflict**: Set `PORT=8788` (or any free port)
+If the user reports issues:
 
-## License
+- **"Protocol error" or "Authentication error"**: Their API key may be wrong or their balance is low. Check at https://ppq.ai
+- **"Attestation failed"**: The secure enclave may be temporarily unavailable. Wait a few minutes and restart: `systemctl --user restart openclaw-gateway.service`
+- **Port conflict**: Add `"port": 8788` to the plugin config in openclaw.json
+- **"Cannot find module 'zod/v4'"**: Re-run `npm install zod@^4 --prefix ~/.openclaw/extensions/ppq-private-mode` and restart the gateway
 
-MIT
+## About
+
+PPQ.AI provides pay-per-query AI inference with no subscriptions. Private models run inside secure enclaves with hardware-enforced memory encryption. Learn more at https://ppq.ai
