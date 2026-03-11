@@ -8,7 +8,14 @@ Follow these steps in order. Ask the user for their PPQ API key when needed.
 
 ### Step 1: Get the user's PPQ API key
 
-Ask the user for their PPQ.AI API key. They can find it at https://ppq.ai/api-docs — it starts with `sk-`.
+First, check if the user already has a PPQ API key configured. Read `~/.openclaw/openclaw.json` and look for an existing key in any of these locations:
+- `plugins.entries.ppq-private-mode.config.apiKey`
+- `plugins.entries.ppq-tinfoil-proxy.config.apiKey`
+- Any provider config with a `baseUrl` pointing to `api.ppq.ai`
+
+If a valid key is found (starts with `sk-`), reuse it — no need to ask the user. Let them know you found their existing key.
+
+If no key is found, ask the user for their PPQ.AI API key. They can find it at https://ppq.ai/api-docs — it starts with `sk-`.
 
 ### Step 2: Install the plugin
 
