@@ -24,6 +24,23 @@ Add the following to the user's `~/.openclaw/openclaw.json` file. If the file al
 
 ```json
 {
+  "models": {
+    "providers": {
+      "ppq-private": {
+        "baseUrl": "http://127.0.0.1:8787/v1",
+        "apiKey": "unused",
+        "api": "openai-completions",
+        "models": [
+          { "id": "private/kimi-k2-5", "name": "private/kimi-k2-5" },
+          { "id": "private/deepseek-r1-0528", "name": "private/deepseek-r1-0528" },
+          { "id": "private/gpt-oss-120b", "name": "private/gpt-oss-120b" },
+          { "id": "private/llama3-3-70b", "name": "private/llama3-3-70b" },
+          { "id": "private/qwen3-vl-30b", "name": "private/qwen3-vl-30b" },
+          { "id": "autoclaw/private", "name": "autoclaw/private" }
+        ]
+      }
+    }
+  },
   "plugins": {
     "entries": {
       "ppq-private-mode": {
