@@ -1,32 +1,42 @@
 ---
 name: ppq-private-mode
-description: Install PPQ.AI Private Mode for end-to-end encrypted AI inference in OpenClaw
+description: Configure PPQ.AI Private Mode encrypted models in OpenClaw
 user-invocable: true
 ---
 
-# PPQ.AI Private Mode -- End-to-End Encrypted AI for OpenClaw
+# PPQ.AI Private Mode -- Configure Encrypted Models
 
-Your queries are encrypted on your machine and only decrypted inside a hardware-secured enclave. Neither PPQ.AI nor any intermediary can read the content.
+This skill configures OpenClaw to use PPQ.AI's end-to-end encrypted models. The PPQ Private Mode plugin must already be installed before running this skill.
 
-## Setup Instructions
+## Prerequisites
 
-Follow these steps in order.
+The user must have already installed the PPQ Private Mode plugin. If it is not installed, tell the user to run this command themselves:
 
-### Step 1: Get the user's PPQ API key
+    openclaw plugins install https://github.com/PayPerQ/ppq-private-mode-proxy
+
+Then ask the user to come back and run this skill again after installing.
+
+## Configuration Steps
+
+### Step 1: Verify the plugin is installed
+
+Check that the plugin exists:
+
+```bash
+ls ~/.openclaw/plugins/ppq-private-mode/
+```
+
+If the directory does not exist, stop and tell the user they need to install the plugin first (see Prerequisites above). Do not continue.
+
+### Step 2: Get the user's PPQ API key
 
 Ask the user for their PPQ.AI API key. They can find it at https://ppq.ai/api-docs -- it starts with `sk-`.
 
 Do not proceed until the user provides their key.
 
-### Step 2: Install the plugin
+### Step 3: Add the provider to OpenClaw config
 
-```bash
-openclaw plugins install https://github.com/PayPerQ/ppq-private-mode-proxy
-```
-
-### Step 3: Configure OpenClaw
-
-Merge the following into `~/.openclaw/openclaw.json`, preserving all existing settings:
+Merge the following into `~/.openclaw/openclaw.json`, preserving all existing settings.
 
 Add a new provider entry under `models.providers`:
 
@@ -64,7 +74,7 @@ systemctl --user restart openclaw-gateway.service
 
 ### Step 5: Confirm to the user
 
-Tell the user PPQ Private Mode is installed. Available encrypted models:
+Tell the user PPQ Private Mode is configured. Available encrypted models:
 
 - `private/kimi-k2-5` -- Fast general tasks
 - `private/deepseek-r1-0528` -- Reasoning and analysis
