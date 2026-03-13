@@ -20,5 +20,5 @@
     "apiBase": { "label": "PPQ API Base URL", "placeholder": "https://api.ppq.ai" },
     "debug": { "label": "Debug Logging" }
   },
-  "skills": ["./skills/private-autoclaw"]
+  "skills": ["./skills/private-mode"]
 }

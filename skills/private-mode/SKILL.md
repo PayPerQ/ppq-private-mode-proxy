@@ -50,8 +50,7 @@ Add a new provider entry under `models.providers`:
     { "id": "private/deepseek-r1-0528", "name": "private/deepseek-r1-0528" },
     { "id": "private/gpt-oss-120b", "name": "private/gpt-oss-120b" },
     { "id": "private/llama3-3-70b", "name": "private/llama3-3-70b" },
-    { "id": "private/qwen3-vl-30b", "name": "private/qwen3-vl-30b" },
-    { "id": "autoclaw/private", "name": "autoclaw/private" }
+    { "id": "private/qwen3-vl-30b", "name": "private/qwen3-vl-30b" }
   ]
 }
 ```
@@ -81,9 +80,8 @@ Tell the user PPQ Private Mode is configured. Available encrypted models:
 - `private/gpt-oss-120b` -- Cost-efficient general use
 - `private/llama3-3-70b` -- Open-source tasks
 - `private/qwen3-vl-30b` -- Vision plus text
-- `autoclaw/private` -- Auto-picks the best private model
 
-Switch with: `openclaw models set autoclaw/private`
+Switch with: `openclaw models set private/kimi-k2-5`
 
 ## About
 

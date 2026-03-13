@@ -58,17 +58,6 @@ const PRIVATE_MODEL_MAP: Record<string, string> = {
 /** All available private model IDs (user-facing) */
 const PRIVATE_MODELS = Object.keys(PRIVATE_MODEL_MAP);
 
-/**
- * Simple heuristic routing for autoclaw/private.
- * Maps complexity tiers to private models.
- */
-const PRIVATE_TIER_MAP = {
-  SIMPLE: "private/llama3-3-70b",
-  MEDIUM: "private/kimi-k2-5",
-  COMPLEX: "private/deepseek-r1-0528",
-  REASONING: "private/deepseek-r1-0528",
-} as const;
-
 /** OpenAI-format model list response */
 const MODEL_LIST_RESPONSE = {
   object: "list",
@@ -103,41 +92,8 @@ const MODEL_LIST_RESPONSE = {
       created: 0,
       owned_by: "ppq-private",
     },
-    {
-      id: "autoclaw/private",
-      object: "model",
-      created: 0,
-      owned_by: "ppq-private",
-    },
   ],
 };
-
-// ─── Routing heuristic for autoclaw/private ──────────────────────────────────
-
-/**
- * Simple rules-based routing for autoclaw/private.
- * Classifies the prompt into a tier and maps to a private model.
- */
-function routePrivate(messages: Array<{ role: string; content: string }>): string {
-  const lastUserMsg = messages?.filter((m) => m.role === "user").pop()?.content || "";
-  const text = typeof lastUserMsg === "string" ? lastUserMsg : JSON.stringify(lastUserMsg);
-  const len = text.length;
-
-  // Simple length + keyword heuristic
-  const reasoningKeywords = /\b(explain|why|prove|analyze|compare|evaluate|reason|think through|step by step)\b/i;
-  const complexKeywords = /\b(implement|refactor|architect|design|debug|optimize|create.*(?:system|api|app))\b/i;
-
-  if (reasoningKeywords.test(text) || len > 2000) {
-    return PRIVATE_TIER_MAP.REASONING;
-  }
-  if (complexKeywords.test(text) || len > 800) {
-    return PRIVATE_TIER_MAP.COMPLEX;
-  }
-  if (len > 200) {
-    return PRIVATE_TIER_MAP.MEDIUM;
-  }
-  return PRIVATE_TIER_MAP.SIMPLE;
-}
 
 // ─── Proxy server ────────────────────────────────────────────────────────────
 
@@ -209,13 +165,6 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
         // Resolve model
         let modelId: string = parsed.model || "private/kimi-k2-5";
 
-        if (modelId === "autoclaw/private") {
-          modelId = routePrivate(parsed.messages);
-          if (config.debug) {
-            logger.debug?.(`autoclaw/private routed to ${modelId}`);
-          }
-        }
-
         // Ensure model is a valid private model
         if (!PRIVATE_MODEL_MAP[modelId]) {
           // Try adding private/ prefix
@@ -227,7 +176,7 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
             res.end(
               JSON.stringify({
                 error: {
-                  message: `Unknown model: ${parsed.model}. Available: ${PRIVATE_MODELS.join(", ")}, autoclaw/private`,
+                  message: `Unknown model: ${parsed.model}. Available: ${PRIVATE_MODELS.join(", ")}`,
                   type: "invalid_request_error",
                 },
               })
