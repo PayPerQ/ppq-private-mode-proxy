@@ -1,4 +1,4 @@
-# PPQ.AI Private Mode — End-to-End Encrypted AI for OpenClaw
+# How to use PPQ's Private (TEE) AI models via our API and with OpenClaw
 
 > Your queries are encrypted on your machine and only decrypted inside a hardware-secured enclave. Neither PPQ.AI nor any intermediary can read the content.
 
