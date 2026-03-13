@@ -42,8 +42,7 @@ Add the following to the user's `~/.openclaw/openclaw.json` file. If the file al
           { "id": "private/deepseek-r1-0528", "name": "private/deepseek-r1-0528" },
           { "id": "private/gpt-oss-120b", "name": "private/gpt-oss-120b" },
           { "id": "private/llama3-3-70b", "name": "private/llama3-3-70b" },
-          { "id": "private/qwen3-vl-30b", "name": "private/qwen3-vl-30b" },
-          { "id": "autoclaw/private", "name": "autoclaw/private" }
+          { "id": "private/qwen3-vl-30b", "name": "private/qwen3-vl-30b" }
         ]
       }
     }
@@ -79,8 +78,7 @@ Tell the user that PPQ Private Mode is now installed. Let them know:
   - `private/gpt-oss-120b` — Cost-efficient general use
   - `private/llama3-3-70b` — Open-source tasks
   - `private/qwen3-vl-30b` — Vision + text, 262K context
-  - `autoclaw/private` — Smart routing that auto-picks the best private model
-- **To switch models**: `openclaw models set autoclaw/private` (or any model above)
+- **To switch models**: `openclaw models set private/kimi-k2-5` (or any model above)
 - **To check status**: Use the `ppq_private_mode_status` tool to verify the proxy is running and attestation succeeded
 
 ## Troubleshooting

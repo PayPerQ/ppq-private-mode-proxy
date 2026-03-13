@@ -9,7 +9,7 @@
  *   1. Copy this plugin directory to your OpenClaw plugins folder
  *   2. Run `npm install` in the plugin directory
  *   3. Add your PPQ API key in OpenClaw settings
- *   4. Set model to any private model or autoclaw/private
+ *   4. Set model to any private model (e.g. private/kimi-k2-5)
  */
 
 import { startProxy, type ProxyHandle, type ProxyConfig } from "./lib/proxy.js";
@@ -102,7 +102,6 @@ export default function register(api: any) {
                     "private/gpt-oss-120b",
                     "private/llama3-3-70b",
                     "private/qwen3-vl-30b",
-                    "autoclaw/private",
                   ],
                 }),
               },
@@ -131,7 +130,7 @@ export default function register(api: any) {
   api.registerProvider({
     id: "ppq-private-mode",
     label: "PPQ Private Mode (End-to-End Encrypted)",
-    docsPath: "./skills/private-autoclaw",
+    docsPath: "./skills/private-mode",
     models: {
       baseUrl: `http://127.0.0.1:${pluginConfig.port || 8787}`,
       api: "openai-completions",
@@ -181,15 +180,6 @@ export default function register(api: any) {
           contextWindow: 262144,
           maxTokens: 8192,
         },
-        {
-          id: "autoclaw/private",
-          name: "Private Mode (Smart Routing)",
-          reasoning: false,
-          input: ["text"],
-          cost: { input: 2.48, output: 8.66, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: 131072,
-          maxTokens: 8192,
-        },
       ],
     },
     auth: [
@@ -207,7 +197,7 @@ export default function register(api: any) {
           if (typeof key === "symbol") throw new Error("Setup cancelled");
           return {
             profiles: [{ profileId: "default", credential: { apiKey: key } }],
-            defaultModel: "autoclaw/private",
+            defaultModel: "private/kimi-k2-5",
           };
         },
       },
