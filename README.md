@@ -1,104 +1,67 @@
-# How to use PPQ's Private (TEE) AI models via our API and with OpenClaw
+# The ppq-private-mode-proxy repo allows you to use PPQ's Private (TEE) AI models via our API and with OpenClaw
 
-> Your queries are encrypted on your machine and only decrypted inside a hardware-secured enclave. Neither PPQ.AI nor any intermediary can read the content.
+The trick in using private models is that you need to encrypt the content of your request before sending them onto PPQ and its AI provider. With our proxy repo, you encrypt the queries on your machine before they leave -- neither PPQ.AI nor anyone else can read them.
 
-This guide walks you through setting up the PPQ private mode proxy. You can follow these steps from either a terminal or the OpenClaw chat interface.
+The repo supports both standalone use cases with your own custom code as well as usage inside of openclaw.
 
-> **Install via the OpenClaw Chat interface or Command line:** Some users report that they are able to install the plugin and update their config files by simply giving the OpenClaw chat interface these instructions. Others report issues. If you encounter problems in the chat, you may need to open a terminal connected to your OpenClaw instance and do it that way.
+# OpenClaw usage
 
-## What You'll Need
+For openclaw usage, simply paste in this command to your openclaw chat interface:
 
-- An OpenClaw installation (already running)
-- A PPQ.AI API key -- get one at https://ppq.ai/api-docs (it starts with `sk-`)
+"Please install this skill to enable private models via PPQ: https://github.com/PayPerQ/ppq-private-mode-proxy/blob/main/skills/private-mode/SKILL.md
 
-## Step 1: Install the Private Mode Plugin
+In some cases, openclaw's safety guardrails block installation via direct links. In that case, try to paste in the text of the skill file. If issues still persist, create an issue in this repo here to help the community troubleshoot.
 
-Run this command to install the plugin:
+# Standalone usage
 
-```
-openclaw plugins install https://github.com/PayPerQ/ppq-private-mode-proxy
-```
+You can run the proxy directly without OpenClaw and point any OpenAI-compatible client at it.
 
-This downloads a local encryption proxy that handles all the cryptography on your machine.
+**Prerequisites:** Node.js 18+ and a PPQ.AI API key from [ppq.ai/api-docs](https://ppq.ai/api-docs).
 
-To verify it installed correctly:
+**Start the proxy:**
 
-```
-ls ~/.openclaw/plugins/ppq-private-mode/
+```bash
+PPQ_API_KEY=sk-your-key npx ppq-private-mode
 ```
 
-You should see files like `index.ts`, `package.json`, etc.
+The proxy starts on port 8787 and prints a ready message once attestation succeeds.
 
-## Step 2: Add Your API Key and Models to OpenClaw Config
+**Send a request** (standard OpenAI chat completions format):
 
-You need to edit your OpenClaw config file at `~/.openclaw/openclaw.json` and add two things: a provider pointing to the local proxy, and your API key.
-
-If you already have a `models.providers` section, merge this in -- don't overwrite your existing providers.
-
-**Add this provider** under `models.providers`:
-
-```json
-"ppq-private": {
-  "baseUrl": "http://127.0.0.1:8787/v1",
-  "apiKey": "unused",
-  "api": "openai-completions",
-  "models": [
-    { "id": "private/kimi-k2-5", "name": "private/kimi-k2-5" },
-    { "id": "private/deepseek-r1-0528", "name": "private/deepseek-r1-0528" },
-    { "id": "private/gpt-oss-120b", "name": "private/gpt-oss-120b" },
-    { "id": "private/llama3-3-70b", "name": "private/llama3-3-70b" },
-    { "id": "private/qwen3-vl-30b", "name": "private/qwen3-vl-30b" }
-  ]
-}
+```bash
+curl http://127.0.0.1:8787/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"private/kimi-k2-5","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
-**Add this plugin config** (replace `YOUR_API_KEY` with your actual PPQ API key):
+**Or point any OpenAI SDK at it:**
 
-```json
-"plugins": {
-  "entries": {
-    "ppq-private-mode": {
-      "config": {
-        "apiKey": "YOUR_API_KEY"
-      }
-    }
-  }
-}
+```js
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "http://127.0.0.1:8787/v1",
+  apiKey: "unused",
+});
+
+const response = await client.chat.completions.create({
+  model: "private/kimi-k2-5",
+  messages: [{ role: "user", content: "Hello" }],
+});
 ```
 
-**Chat interface shortcut:** You can tell OpenClaw: *"Please add the ppq-private provider to my openclaw.json config. Here's the JSON to merge in:"* and paste the blocks above. The AI can edit config files for you.
+**Environment variables:**
 
-## Step 3: Restart the Gateway
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `PPQ_API_KEY` | Yes | — | Your PPQ.AI API key |
+| `PORT` | No | `8787` | Local proxy port |
+| `PPQ_API_BASE` | No | `https://api.ppq.ai` | PPQ API base URL |
+| `DEBUG` | No | `false` | Set to `true` for verbose logging |
 
-```
-systemctl --user restart openclaw-gateway.service
-```
+## How This proxy repo works
 
-This starts the local encryption proxy and connects it to your OpenClaw instance.
-
-## Step 4: Switch to a Private Model
-
-```
-openclaw models set private/kimi-k2-5
-```
-
-That's it! Your queries are now end-to-end encrypted. You may need to start a new chat session for the model change to take effect.
-
-## Available Private Models
-
-| Model | Best For |
-|-------|----------|
-| `private/kimi-k2-5` | **Recommended.** Fast general tasks, 262K context window |
-| `private/deepseek-r1-0528` | Reasoning and analysis |
-| `private/gpt-oss-120b` | Budget-friendly general use |
-| `private/llama3-3-70b` | Open-source tasks |
-| `private/qwen3-vl-30b` | Vision + text, 262K context window |
-
-Switch between them anytime with `openclaw models set <model-name>`.
-
-## How It Works
-
-The plugin runs a local proxy on your machine (port 8787) that:
+The code in this runs a local proxy on your machine (port 8787) that:
 
 1. **Verifies the enclave** -- performs hardware attestation to confirm it's talking to a genuine secure enclave, not an impersonator
 2. **Encrypts your request** -- uses HPKE (RFC 9180) to encrypt the entire request body before it leaves your machine
@@ -107,38 +70,6 @@ The plugin runs a local proxy on your machine (port 8787) that:
 5. **Your proxy decrypts** -- the response is decrypted locally on your machine
 
 PPQ.AI handles billing via HTTP headers (your API key), so they never need to see the actual content of your queries.
-
-## Using Private Mode Alongside Regular Models
-
-Your existing OpenClaw models continue working normally. Standard models (like Claude, GPT, etc.) use their regular API routes, while private models route through the encrypted proxy. Both can coexist in your config, and you can switch between them anytime.
-
-## Troubleshooting
-
-**"Authentication error" or "Protocol error"**
-Your API key may be wrong or your account balance is low. Check at https://ppq.ai
-
-**"Attestation failed"**
-The secure enclave may be temporarily unavailable. Wait a few minutes and restart:
-```
-systemctl --user restart openclaw-gateway.service
-```
-
-**Port conflict on 8787**
-If something else is using port 8787, add a different port to your plugin config in `openclaw.json`:
-```json
-"ppq-private-mode": {
-  "config": {
-    "apiKey": "YOUR_API_KEY",
-    "port": 8788
-  }
-}
-```
-
-**Plugin not found after install**
-Make sure `~/.openclaw/plugins/ppq-private-mode/` exists. If not, re-run the install command from Step 1.
-
-**Checking proxy status**
-Use the `ppq_private_mode_status` tool in OpenClaw to verify the proxy is running and attestation succeeded.
 
 ## About
 
