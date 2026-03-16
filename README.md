@@ -1,4 +1,8 @@
-# ppq-private-mode allows you to use PPQ's Private (TEE) AI models via our API and with OpenClaw
+# What are "TEE" AI models?
+
+TEE (Trusted Execution Environment) AI models allow users to run AI queries in the cloud and on remote servers without those servers having access to the content of the users' queries. This delivers one of the best AI capability to privacy tradeoffs in the industry currently.
+
+# ppq-private-mode: Use PPQ's Private (TEE) AI models via our API and with OpenClaw
 
 The trick in using private models is that you need to encrypt the content of your request before sending them onto PPQ and its AI provider. With our proxy repo, you encrypt the queries on your machine before they leave -- neither PPQ.AI nor anyone else can read them.
 
@@ -8,7 +12,9 @@ The repo supports both standalone use cases with your own custom code as well as
 
 For openclaw usage, simply paste in this command to your openclaw chat interface:
 
+```
 Please install this skill to enable private models via PPQ: https://github.com/PayPerQ/ppq-private-mode-proxy/blob/main/skills/private-mode/SKILL.md
+```
 
 In some cases, openclaw's safety guardrails block installation via direct links. In that case, try to paste in the text of the skill file. If issues still persist, create an issue in this repo here to help the community troubleshoot.
 
