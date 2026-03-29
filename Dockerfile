@@ -12,4 +12,4 @@ ENV PORT=8787
 
 EXPOSE 8787
 
-CMD ["npx", "tsx", "bin/server.ts"]
+CMD ["node", "--import", "tsx", "bin/server.ts"]

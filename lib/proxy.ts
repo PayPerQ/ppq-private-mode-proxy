@@ -45,7 +45,6 @@ export interface Logger {
 
 const DEFAULT_PORT = 8787;
 const DEFAULT_API_BASE = "https://api.ppq.ai";
-const HEALTH_TIMEOUT_MS = 15_000;
 
 /** Maps user-facing model IDs to enclave-internal model IDs */
 const PRIVATE_MODEL_MAP: Record<string, string> = {
@@ -59,41 +58,15 @@ const PRIVATE_MODEL_MAP: Record<string, string> = {
 /** All available private model IDs (user-facing) */
 const PRIVATE_MODELS = Object.keys(PRIVATE_MODEL_MAP);
 
-/** OpenAI-format model list response */
+/** OpenAI-format model list response (derived from PRIVATE_MODEL_MAP) */
 const MODEL_LIST_RESPONSE = {
   object: "list",
-  data: [
-    {
-      id: "private/kimi-k2-5",
-      object: "model",
-      created: 0,
-      owned_by: "ppq-private",
-    },
-    {
-      id: "private/deepseek-r1-0528",
-      object: "model",
-      created: 0,
-      owned_by: "ppq-private",
-    },
-    {
-      id: "private/gpt-oss-120b",
-      object: "model",
-      created: 0,
-      owned_by: "ppq-private",
-    },
-    {
-      id: "private/llama3-3-70b",
-      object: "model",
-      created: 0,
-      owned_by: "ppq-private",
-    },
-    {
-      id: "private/qwen3-vl-30b",
-      object: "model",
-      created: 0,
-      owned_by: "ppq-private",
-    },
-  ],
+  data: PRIVATE_MODELS.map((id) => ({
+    id,
+    object: "model",
+    created: 0,
+    owned_by: "ppq-private",
+  })),
 };
 
 // ─── Proxy server ────────────────────────────────────────────────────────────
@@ -128,7 +101,7 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
     logger.info("Attestation completed (verification document unavailable)");
   }
 
-  const encryptedFetch = client.fetch;
+  const encryptedFetch = client.fetch.bind(client);
 
   const server = http.createServer(async (req, res) => {
     // CORS headers
@@ -142,7 +115,7 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
       return;
     }
 
-    const url = new URL(req.url || "/", `http://127.0.0.1:${port}`);
+    const url = new URL(req.url || "/", `http://${host}:${port}`);
 
     // GET /health
     if (url.pathname === "/health" || url.pathname === "/") {

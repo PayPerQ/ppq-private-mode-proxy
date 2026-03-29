@@ -76,7 +76,7 @@ export default function register(api: any) {
         // Health check
         try {
           const resp = await fetch(`http://127.0.0.1:${proxy.port}/health`);
-          const health = await resp.json();
+          await resp.json();
 
           return {
             content: [
