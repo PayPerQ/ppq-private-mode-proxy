@@ -61,9 +61,50 @@ const response = await client.chat.completions.create({
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `PPQ_API_KEY` | Yes | — | Your PPQ.AI API key |
+| `HOST` | No | `127.0.0.1` | Bind address |
 | `PORT` | No | `8787` | Local proxy port |
 | `PPQ_API_BASE` | No | `https://api.ppq.ai` | PPQ API base URL |
 | `DEBUG` | No | `false` | Set to `true` for verbose logging |
+
+# Docker
+
+You can run the proxy in Docker instead of installing Node.js locally. A prebuilt image is published to GitHub Container Registry.
+
+**Run with the published image:**
+
+```bash
+docker run -d --name ppq-proxy \
+  -p 8787:8787 \
+  -e PPQ_API_KEY=sk-your-key \
+  ghcr.io/payperq/ppq-private-mode-proxy:latest
+```
+
+**Or build locally:**
+
+```bash
+docker build -t ppq-proxy .
+docker run -d --name ppq-proxy \
+  -p 8787:8787 \
+  -e PPQ_API_KEY=sk-your-key \
+  ppq-proxy
+```
+
+The proxy will be available at `http://localhost:8787`.
+
+**Test it:**
+
+```bash
+curl http://localhost:8787/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"private/kimi-k2-5","messages":[{"role":"user","content":"Hello"}]}'
+```
+
+**View logs / stop:**
+
+```bash
+docker logs -f ppq-proxy
+docker stop ppq-proxy && docker rm ppq-proxy
+```
 
 ## How This proxy repo works
 

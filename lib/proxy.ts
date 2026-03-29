@@ -22,6 +22,7 @@ import type { SecureClient, VerificationDocument } from "tinfoil";
 
 export interface ProxyConfig {
   apiKey: string;
+  host: string;
   port: number;
   apiBase: string;
   debug: boolean;
@@ -44,7 +45,6 @@ export interface Logger {
 
 const DEFAULT_PORT = 8787;
 const DEFAULT_API_BASE = "https://api.ppq.ai";
-const HEALTH_TIMEOUT_MS = 15_000;
 
 /** Maps user-facing model IDs to enclave-internal model IDs */
 const PRIVATE_MODEL_MAP: Record<string, string> = {
@@ -58,46 +58,21 @@ const PRIVATE_MODEL_MAP: Record<string, string> = {
 /** All available private model IDs (user-facing) */
 const PRIVATE_MODELS = Object.keys(PRIVATE_MODEL_MAP);
 
-/** OpenAI-format model list response */
+/** OpenAI-format model list response (derived from PRIVATE_MODEL_MAP) */
 const MODEL_LIST_RESPONSE = {
   object: "list",
-  data: [
-    {
-      id: "private/kimi-k2-5",
-      object: "model",
-      created: 0,
-      owned_by: "ppq-private",
-    },
-    {
-      id: "private/deepseek-r1-0528",
-      object: "model",
-      created: 0,
-      owned_by: "ppq-private",
-    },
-    {
-      id: "private/gpt-oss-120b",
-      object: "model",
-      created: 0,
-      owned_by: "ppq-private",
-    },
-    {
-      id: "private/llama3-3-70b",
-      object: "model",
-      created: 0,
-      owned_by: "ppq-private",
-    },
-    {
-      id: "private/qwen3-vl-30b",
-      object: "model",
-      created: 0,
-      owned_by: "ppq-private",
-    },
-  ],
+  data: PRIVATE_MODELS.map((id) => ({
+    id,
+    object: "model",
+    created: 0,
+    owned_by: "ppq-private",
+  })),
 };
 
 // ─── Proxy server ────────────────────────────────────────────────────────────
 
 export async function startProxy(config: ProxyConfig, logger: Logger): Promise<ProxyHandle> {
+  const host = config.host || "127.0.0.1";
   const port = config.port || DEFAULT_PORT;
   const apiBase = config.apiBase || DEFAULT_API_BASE;
 
@@ -126,7 +101,7 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
     logger.info("Attestation completed (verification document unavailable)");
   }
 
-  const encryptedFetch = client.fetch;
+  const encryptedFetch = client.fetch.bind(client);
 
   const server = http.createServer(async (req, res) => {
     // CORS headers
@@ -140,7 +115,7 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
       return;
     }
 
-    const url = new URL(req.url || "/", `http://127.0.0.1:${port}`);
+    const url = new URL(req.url || "/", `http://${host}:${port}`);
 
     // GET /health
     if (url.pathname === "/health" || url.pathname === "/") {
@@ -284,8 +259,8 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
   // Start listening
   await new Promise<void>((resolve, reject) => {
     server.on("error", reject);
-    server.listen(port, "127.0.0.1", () => {
-      logger.info(`PPQ Private Mode proxy listening on http://127.0.0.1:${port}`);
+    server.listen(port, host, () => {
+      logger.info(`PPQ Private Mode proxy listening on http://${host}:${port}`);
       logger.info(`Endpoints: GET /v1/models, POST /v1/chat/completions`);
       resolve();
     });

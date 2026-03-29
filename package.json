@@ -14,8 +14,7 @@
   },
   "files": ["index.ts", "lib", "bin", "skills", "openclaw.plugin.json"],
   "dependencies": {
-    "tinfoil": "^1.0.0",
-    "zod": "^4.0.0"
+    "tinfoil": "^1.0.0"
   },
   "peerDependencies": {
     "openclaw": ">=2026.1.0"

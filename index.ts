@@ -76,7 +76,7 @@ export default function register(api: any) {
         // Health check
         try {
           const resp = await fetch(`http://127.0.0.1:${proxy.port}/health`);
-          const health = await resp.json();
+          await resp.json();
 
           return {
             content: [
@@ -219,6 +219,7 @@ export default function register(api: any) {
 
       const config: ProxyConfig = {
         apiKey: pluginConfig.apiKey,
+        host: "127.0.0.1",
         port: pluginConfig.port || 8787,
         apiBase: pluginConfig.apiBase || "https://api.ppq.ai",
         debug: pluginConfig.debug || false,
