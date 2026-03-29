@@ -22,6 +22,7 @@ import type { SecureClient, VerificationDocument } from "tinfoil";
 
 export interface ProxyConfig {
   apiKey: string;
+  host: string;
   port: number;
   apiBase: string;
   debug: boolean;
@@ -98,6 +99,7 @@ const MODEL_LIST_RESPONSE = {
 // ─── Proxy server ────────────────────────────────────────────────────────────
 
 export async function startProxy(config: ProxyConfig, logger: Logger): Promise<ProxyHandle> {
+  const host = config.host || "127.0.0.1";
   const port = config.port || DEFAULT_PORT;
   const apiBase = config.apiBase || DEFAULT_API_BASE;
 
@@ -284,8 +286,8 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
   // Start listening
   await new Promise<void>((resolve, reject) => {
     server.on("error", reject);
-    server.listen(port, "127.0.0.1", () => {
-      logger.info(`PPQ Private Mode proxy listening on http://127.0.0.1:${port}`);
+    server.listen(port, host, () => {
+      logger.info(`PPQ Private Mode proxy listening on http://${host}:${port}`);
       logger.info(`Endpoints: GET /v1/models, POST /v1/chat/completions`);
       resolve();
     });
