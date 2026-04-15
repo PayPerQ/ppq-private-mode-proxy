@@ -53,6 +53,8 @@ const PRIVATE_MODEL_MAP: Record<string, string> = {
   "private/gpt-oss-120b": "gpt-oss-120b",
   "private/llama3-3-70b": "llama3-3-70b",
   "private/qwen3-vl-30b": "qwen3-vl-30b",
+  "private/glm-5-1": "glm-5-1",
+  "private/gemma4-31b": "gemma4-31b",
 };
 
 /** All available private model IDs (user-facing) */
@@ -88,6 +90,18 @@ const MODEL_LIST_RESPONSE = {
     },
     {
       id: "private/qwen3-vl-30b",
+      object: "model",
+      created: 0,
+      owned_by: "ppq-private",
+    },
+    {
+      id: "private/glm-5-1",
+      object: "model",
+      created: 0,
+      owned_by: "ppq-private",
+    },
+    {
+      id: "private/gemma4-31b",
       object: "model",
       created: 0,
       owned_by: "ppq-private",
