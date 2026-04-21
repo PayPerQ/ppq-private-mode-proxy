@@ -98,6 +98,7 @@ export default function register(api: any) {
                   },
                   availableModels: [
                     "private/kimi-k2-5",
+                    "private/kimi-k2-6",
                     "private/deepseek-r1-0528",
                     "private/gpt-oss-120b",
                     "private/llama3-3-70b",
@@ -142,6 +143,15 @@ export default function register(api: any) {
           name: "Kimi K2.5 (Private)",
           reasoning: false,
           input: ["text"],
+          cost: { input: 1.58, output: 5.51, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: 262144,
+          maxTokens: 8192,
+        },
+        {
+          id: "private/kimi-k2-6",
+          name: "Kimi K2.6 (Private)",
+          reasoning: false,
+          input: ["text", "image"],
           cost: { input: 1.58, output: 5.51, cacheRead: 0, cacheWrite: 0 },
           contextWindow: 262144,
           maxTokens: 8192,
