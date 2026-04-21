@@ -49,6 +49,7 @@ const HEALTH_TIMEOUT_MS = 15_000;
 /** Maps user-facing model IDs to enclave-internal model IDs */
 const PRIVATE_MODEL_MAP: Record<string, string> = {
   "private/kimi-k2-5": "kimi-k2-5",
+  "private/kimi-k2-6": "kimi-k2-6",
   "private/deepseek-r1-0528": "deepseek-r1-0528",
   "private/gpt-oss-120b": "gpt-oss-120b",
   "private/llama3-3-70b": "llama3-3-70b",
@@ -66,6 +67,12 @@ const MODEL_LIST_RESPONSE = {
   data: [
     {
       id: "private/kimi-k2-5",
+      object: "model",
+      created: 0,
+      owned_by: "ppq-private",
+    },
+    {
+      id: "private/kimi-k2-6",
       object: "model",
       created: 0,
       owned_by: "ppq-private",
