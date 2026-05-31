@@ -37,7 +37,7 @@ The proxy starts on port 8787 and prints a ready message once attestation succee
 ```bash
 curl http://127.0.0.1:8787/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model":"private/kimi-k2-5","messages":[{"role":"user","content":"Hello"}]}'
+  -d '{"model":"private/kimi-k2-6","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
 **Or point any OpenAI SDK at it:**
@@ -51,7 +51,7 @@ const client = new OpenAI({
 });
 
 const response = await client.chat.completions.create({
-  model: "private/kimi-k2-5",
+  model: "private/kimi-k2-6",
   messages: [{ role: "user", content: "Hello" }],
 });
 ```
