@@ -53,8 +53,7 @@ Here is the complete config to merge (replace `USER_API_KEY` with the actual key
         "apiKey": "unused",
         "api": "openai-completions",
         "models": [
-          { "id": "private/kimi-k2-5", "name": "private/kimi-k2-5" },
-          { "id": "private/deepseek-r1-0528", "name": "private/deepseek-r1-0528" },
+          { "id": "private/kimi-k2-6", "name": "private/kimi-k2-6" },
           { "id": "private/gpt-oss-120b", "name": "private/gpt-oss-120b" },
           { "id": "private/llama3-3-70b", "name": "private/llama3-3-70b" },
           { "id": "private/qwen3-vl-30b", "name": "private/qwen3-vl-30b" },
@@ -77,7 +76,7 @@ Here is the complete config to merge (replace `USER_API_KEY` with the actual key
 ```
 
 After merging, verify that `~/.openclaw/openclaw.json` contains BOTH:
-1. A `ppq-private` entry under `models.providers` with the 7 private models listed
+1. A `ppq-private` entry under `models.providers` with the 6 private models listed
 2. A `ppq-private-mode` entry under `plugins.entries` with the user's API key
 
 If either is missing, the private models will not work.
@@ -92,15 +91,14 @@ systemctl --user restart openclaw-gateway.service
 
 Tell the user PPQ Private Mode is configured. Available encrypted models:
 
-- `private/kimi-k2-5` -- Fast general tasks, 262K context
-- `private/deepseek-r1-0528` -- Reasoning and analysis
+- `private/kimi-k2-6` -- Latest Kimi, native multimodal, strong coding, 262K context
 - `private/gpt-oss-120b` -- Cost-efficient general use
 - `private/llama3-3-70b` -- Open-source tasks
 - `private/qwen3-vl-30b` -- Vision plus text, 262K context
 - `private/glm-5-1` -- Agentic engineering with long-horizon tool use, 202K context
 - `private/gemma4-31b` -- Vision plus text with thinking mode, 262K context
 
-Switch with: `openclaw models set private/kimi-k2-5`
+Switch with: `openclaw models set private/kimi-k2-6`
 
 ## Troubleshooting
 

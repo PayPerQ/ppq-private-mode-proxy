@@ -38,7 +38,7 @@ console.log("");
 console.log("Send a test request:");
 console.log(`  curl http://127.0.0.1:${proxy.port}/v1/chat/completions \\`);
 console.log(`    -H "Content-Type: application/json" \\`);
-console.log(`    -d '{"model":"private/kimi-k2-5","messages":[{"role":"user","content":"Hello"}]}'`);
+console.log(`    -d '{"model":"private/kimi-k2-6","messages":[{"role":"user","content":"Hello"}]}'`);
 console.log("");
 
 // Graceful shutdown
