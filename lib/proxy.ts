@@ -202,11 +202,18 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
 
         // Forward via SecureClient (EHBP-encrypted)
         const endpoint = `${apiBase}/private/v1/chat/completions`;
+        // Prefer a per-request Authorization header (lets callers pass their own
+        // key per call); fall back to the key the proxy was started with.
+        const incomingAuth = req.headers["authorization"];
+        const upstreamAuth =
+          typeof incomingAuth === "string" && incomingAuth.trim()
+            ? incomingAuth
+            : `Bearer ${config.apiKey}`;
         const response = await encryptedFetch(endpoint, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${config.apiKey}`,
+            Authorization: upstreamAuth,
             "X-Private-Model": modelId,
             "x-query-source": "api",
           },
