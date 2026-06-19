@@ -22,7 +22,7 @@ In some cases, openclaw's safety guardrails block installation via direct links.
 
 You can run the proxy directly without OpenClaw and point any OpenAI-compatible client at it.
 
-**Prerequisites:** Node.js 18+ and a PPQ.AI API key from [ppq.ai/api-docs](https://ppq.ai/api-docs).
+**Prerequisites:** Node.js 20+ and a PPQ.AI API key from [ppq.ai/api-docs](https://ppq.ai/api-docs).
 
 **Start the proxy:**
 
@@ -37,6 +37,15 @@ The proxy starts on port 8787 and prints a ready message once attestation succee
 ```bash
 curl http://127.0.0.1:8787/v1/chat/completions \
   -H "Content-Type: application/json" \
+  -d '{"model":"private/kimi-k2-6","messages":[{"role":"user","content":"Hello"}]}'
+```
+
+The proxy bills against `PPQ_API_KEY` by default. To use a different key per request, pass it as a bearer token and the proxy will forward it instead:
+
+```bash
+curl http://127.0.0.1:8787/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-another-key" \
   -d '{"model":"private/kimi-k2-6","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
