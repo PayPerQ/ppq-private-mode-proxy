@@ -202,13 +202,19 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
 
         // Forward via SecureClient (EHBP-encrypted)
         const endpoint = `${apiBase}/private/v1/chat/completions`;
-        // Prefer a per-request Authorization header (lets callers pass their own
-        // key per call); fall back to the key the proxy was started with.
+        // Allow callers to pass their own PPQ key per request, but ONLY forward it
+        // when it has the exact PPQ key shape ("sk-" + 22 [A-Za-z0-9]). Agent clients
+        // routinely send their own placeholder Authorization header to a local
+        // OpenAI-compatible endpoint — both obvious ones ("Bearer none", "ollama")
+        // and sk-prefixed ones ("Bearer sk-no-key-required"). Forwarding any of those
+        // upstream overrode PPQ_API_KEY and produced a plaintext 401, which the EHBP
+        // client surfaced as the misleading "missing ehbp-response-nonce header"
+        // ProtocolError. Anything that isn't a real PPQ key falls back to the key the
+        // proxy was started with.
         const incomingAuth = req.headers["authorization"];
-        const upstreamAuth =
-          typeof incomingAuth === "string" && incomingAuth.trim()
-            ? incomingAuth
-            : `Bearer ${config.apiKey}`;
+        const trimmedAuth = typeof incomingAuth === "string" ? incomingAuth.trim() : "";
+        const forwardable = /^Bearer\s+sk-[A-Za-z0-9]{22}$/.test(trimmedAuth);
+        const upstreamAuth = forwardable ? trimmedAuth : `Bearer ${config.apiKey}`;
         const response = await encryptedFetch(endpoint, {
           method: "POST",
           headers: {
