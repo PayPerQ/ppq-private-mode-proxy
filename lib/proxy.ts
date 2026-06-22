@@ -465,21 +465,28 @@ async function streamAnthropic(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let done = false;
 
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    while (!done) {
+      const { done: streamDone, value } = await reader.read();
+      if (streamDone) break;
       buffer += decoder.decode(value, { stream: true });
 
-      // SSE events are separated by blank lines; process complete lines only.
+      // OpenAI emits one JSON object per `data:` line; process complete lines.
       let nl: number;
       while ((nl = buffer.indexOf("\n")) !== -1) {
         const line = buffer.slice(0, nl).trim();
         buffer = buffer.slice(nl + 1);
         if (!line.startsWith("data:")) continue;
         const payload = line.slice(5).trim();
-        if (!payload || payload === "[DONE]") continue;
+        if (!payload) continue;
+        if (payload === "[DONE]") {
+          // Stop on the sentinel rather than waiting for the socket to close,
+          // so the client isn't left hanging for message_stop.
+          done = true;
+          break;
+        }
         try {
           translator.pushChunk(JSON.parse(payload));
         } catch {
@@ -487,8 +494,12 @@ async function streamAnthropic(
         }
       }
     }
-  } finally {
     translator.finish();
+  } catch (err: any) {
+    // A mid-stream failure must surface as an Anthropic `error` event, not a
+    // clean message_stop — otherwise a broken turn looks like a completed one.
+    translator.error(err?.message || "Upstream stream error");
+  } finally {
     res.end();
   }
 }

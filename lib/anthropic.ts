@@ -148,10 +148,12 @@ export function anthropicToOpenAI(req: AnthropicRequest): Record<string, unknown
           image_url: { url: imageToUrl(block.source) },
         });
       } else if (block.type === "tool_result") {
+        // OpenAI's tool role has no error flag, so surface is_error inline.
+        const text = toolResultToText(block.content);
         pendingToolMessages.push({
           role: "tool",
           tool_call_id: block.tool_use_id,
-          content: toolResultToText(block.content),
+          content: block.is_error ? `Error: ${text}` : text,
         });
       }
     }
@@ -317,16 +319,26 @@ interface SSEWriter {
   (event: string, data: unknown): void;
 }
 
-interface ToolBlockState {
-  anthropicIndex: number;
-  started: boolean;
+/** Accumulated state for a single streamed tool call (keyed by OpenAI index). */
+interface PendingToolCall {
+  order: number; // first-seen order, drives Anthropic block ordering
+  id: string;
+  name: string;
+  args: string;
 }
 
 /**
  * Stateful translator that consumes OpenAI streaming chunks and emits the
  * Anthropic SSE event sequence (message_start → content_block_* → message_delta
  * → message_stop). Feed each parsed OpenAI `data:` object to `pushChunk`, then
- * call `finish` once the upstream stream ends.
+ * call `finish` once the upstream stream ends (or `error` if it fails midway).
+ *
+ * Text streams live as it arrives. Tool calls are buffered and emitted as
+ * complete blocks at the end: OpenAI splits a tool call's id/name/arguments
+ * across several deltas (and some providers defer the name), so emitting the
+ * `content_block_start` only once the call is fully assembled guarantees a
+ * correct id + name and the canonical text-before-tool_use ordering Claude
+ * Code expects.
  */
 export class AnthropicStreamTranslator {
   private write: SSEWriter;
@@ -334,9 +346,11 @@ export class AnthropicStreamTranslator {
   private messageId: string;
 
   private messageStarted = false;
+  private finished = false;
   private textBlockIndex = -1; // anthropic index of the open text block, or -1
   private nextIndex = 0;
-  private toolBlocks = new Map<number, ToolBlockState>(); // keyed by OpenAI tool_call index
+  private toolCalls = new Map<number, PendingToolCall>(); // keyed by OpenAI tool_call index
+  private toolOrder = 0;
   private finishReason: string | null = null;
   private inputTokens = 0;
   private outputTokens = 0;
@@ -384,17 +398,6 @@ export class AnthropicStreamTranslator {
     this.textBlockIndex = -1;
   }
 
-  private closeToolBlock(oaiIndex: number): void {
-    const state = this.toolBlocks.get(oaiIndex);
-    if (state?.started) {
-      this.write("content_block_stop", {
-        type: "content_block_stop",
-        index: state.anthropicIndex,
-      });
-      state.started = false;
-    }
-  }
-
   pushChunk(chunk: {
     choices?: Array<{
       delta?: {
@@ -409,6 +412,7 @@ export class AnthropicStreamTranslator {
     }>;
     usage?: { prompt_tokens?: number; completion_tokens?: number };
   }): void {
+    if (this.finished) return;
     this.ensureStarted();
 
     if (chunk.usage) {
@@ -423,7 +427,7 @@ export class AnthropicStreamTranslator {
 
     const delta = choice.delta;
 
-    // Text delta.
+    // Text streams live.
     if (delta?.content) {
       this.openTextBlock();
       this.write("content_block_delta", {
@@ -433,39 +437,16 @@ export class AnthropicStreamTranslator {
       });
     }
 
-    // Tool call deltas.
+    // Tool calls are accumulated (id/name/args may each arrive across deltas).
     for (const tc of delta?.tool_calls ?? []) {
-      // A tool call always supersedes any open text block.
-      this.closeTextBlock();
-
-      let state = this.toolBlocks.get(tc.index);
-      if (!state) {
-        state = { anthropicIndex: this.nextIndex++, started: false };
-        this.toolBlocks.set(tc.index, state);
+      let call = this.toolCalls.get(tc.index);
+      if (!call) {
+        call = { order: this.toolOrder++, id: "", name: "", args: "" };
+        this.toolCalls.set(tc.index, call);
       }
-
-      if (!state.started) {
-        state.started = true;
-        this.write("content_block_start", {
-          type: "content_block_start",
-          index: state.anthropicIndex,
-          content_block: {
-            type: "tool_use",
-            id: tc.id || `toolu_${state.anthropicIndex}`,
-            name: tc.function?.name || "",
-            input: {},
-          },
-        });
-      }
-
-      const args = tc.function?.arguments;
-      if (args) {
-        this.write("content_block_delta", {
-          type: "content_block_delta",
-          index: state.anthropicIndex,
-          delta: { type: "input_json_delta", partial_json: args },
-        });
-      }
+      if (tc.id) call.id = tc.id;
+      if (tc.function?.name) call.name = tc.function.name;
+      if (tc.function?.arguments) call.args += tc.function.arguments;
     }
 
     if (choice.finish_reason) {
@@ -475,9 +456,32 @@ export class AnthropicStreamTranslator {
 
   /** Emit the closing event sequence. Safe to call exactly once. */
   finish(): void {
+    if (this.finished) return;
     this.ensureStarted();
     this.closeTextBlock();
-    for (const oaiIndex of this.toolBlocks.keys()) this.closeToolBlock(oaiIndex);
+
+    // Emit buffered tool calls as complete blocks, in first-seen order.
+    const calls = [...this.toolCalls.values()].sort((a, b) => a.order - b.order);
+    for (const call of calls) {
+      const index = this.nextIndex++;
+      this.write("content_block_start", {
+        type: "content_block_start",
+        index,
+        content_block: {
+          type: "tool_use",
+          id: call.id || `toolu_${index}`,
+          name: call.name,
+          input: {},
+        },
+      });
+      // input_json_delta carries the (possibly empty) raw JSON arguments string.
+      this.write("content_block_delta", {
+        type: "content_block_delta",
+        index,
+        delta: { type: "input_json_delta", partial_json: call.args || "{}" },
+      });
+      this.write("content_block_stop", { type: "content_block_stop", index });
+    }
 
     this.write("message_delta", {
       type: "message_delta",
@@ -488,5 +492,22 @@ export class AnthropicStreamTranslator {
       usage: { output_tokens: this.outputTokens },
     });
     this.write("message_stop", { type: "message_stop" });
+    this.finished = true;
+  }
+
+  /**
+   * Abort a stream that failed midway. Emits an Anthropic `error` event instead
+   * of a clean `message_stop`, so the client never mistakes a broken stream for
+   * a completed turn. Closes any open text block first.
+   */
+  error(message: string): void {
+    if (this.finished) return;
+    this.ensureStarted();
+    this.closeTextBlock();
+    this.write("error", {
+      type: "error",
+      error: { type: "api_error", message },
+    });
+    this.finished = true;
   }
 }
