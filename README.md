@@ -94,22 +94,25 @@ environment variables before launching `claude`:
 export ANTHROPIC_BASE_URL="http://127.0.0.1:8787"
 export ANTHROPIC_AUTH_TOKEN="sk-your-key"   # your PPQ.AI API key
 # Route every Claude Code "model slot" to a private model:
-export ANTHROPIC_MODEL="private/kimi-k2-6"             # main model
-export ANTHROPIC_SMALL_FAST_MODEL="private/kimi-k2-6"  # background tasks
+export ANTHROPIC_MODEL="private/glm-5-2"             # main model
+export ANTHROPIC_SMALL_FAST_MODEL="private/glm-5-2"  # background tasks
 
 claude
 ```
 
-`private/kimi-k2-6` and `private/glm-5-2` are the strongest agentic/coding
-choices. That's it — every request Claude Code makes is now end-to-end encrypted
-to the PPQ enclave.
+**Use `private/glm-5-2` for Claude Code.** Claude Code drives everything through
+tool calls, and `glm-5-2`, `gpt-oss-120b`, and `llama3-3-70b` all emit tool
+calls correctly through the enclave. Avoid `private/kimi-k2-6` here — it does not
+currently return structured tool calls from the enclave, so Claude Code can't
+edit files or run commands with it (it's still fine for plain chat). Every
+request Claude Code makes is end-to-end encrypted to the PPQ enclave.
 
 **Verify the endpoint directly** (Anthropic Messages format):
 
 ```bash
 curl http://127.0.0.1:8787/v1/messages \
   -H "Content-Type: application/json" \
-  -d '{"model":"private/kimi-k2-6","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}'
+  -d '{"model":"private/glm-5-2","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}'
 ```
 
 ## How This proxy repo works

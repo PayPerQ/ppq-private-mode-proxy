@@ -43,9 +43,10 @@ console.log("");
 console.log("Use with Claude Code (Anthropic format, POST /v1/messages):");
 console.log(`  export ANTHROPIC_BASE_URL="http://127.0.0.1:${proxy.port}"`);
 console.log(`  export ANTHROPIC_AUTH_TOKEN="$PPQ_API_KEY"`);
-console.log(`  export ANTHROPIC_MODEL="private/kimi-k2-6"`);
-console.log(`  export ANTHROPIC_SMALL_FAST_MODEL="private/kimi-k2-6"`);
+console.log(`  export ANTHROPIC_MODEL="private/glm-5-2"`);
+console.log(`  export ANTHROPIC_SMALL_FAST_MODEL="private/glm-5-2"`);
 console.log(`  claude`);
+console.log("  # glm-5-2 / gpt-oss-120b / llama3-3-70b support tool calls; avoid kimi-k2-6 for Claude Code");
 console.log("");
 
 // Graceful shutdown
