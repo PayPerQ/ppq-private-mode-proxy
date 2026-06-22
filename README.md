@@ -74,6 +74,44 @@ const response = await client.chat.completions.create({
 | `PPQ_API_BASE` | No | `https://api.ppq.ai` | PPQ API base URL |
 | `DEBUG` | No | `false` | Set to `true` for verbose logging |
 
+# Claude Code usage
+
+Claude Code (and any other Anthropic-SDK client) speaks the Anthropic Messages
+format, not the OpenAI format. The proxy exposes a native Anthropic endpoint at
+`POST /v1/messages` that translates to/from the encrypted enclave for you —
+including tool calls and streaming — so you can point Claude Code straight at it.
+
+**1. Start the proxy** (leave it running in its own terminal):
+
+```bash
+PPQ_API_KEY=sk-your-key npx ppq-private-mode
+```
+
+**2. Point Claude Code at the proxy** and pick a private model. Set these
+environment variables before launching `claude`:
+
+```bash
+export ANTHROPIC_BASE_URL="http://127.0.0.1:8787"
+export ANTHROPIC_AUTH_TOKEN="sk-your-key"   # your PPQ.AI API key
+# Route every Claude Code "model slot" to a private model:
+export ANTHROPIC_MODEL="private/kimi-k2-6"             # main model
+export ANTHROPIC_SMALL_FAST_MODEL="private/kimi-k2-6"  # background tasks
+
+claude
+```
+
+`private/kimi-k2-6` and `private/glm-5-2` are the strongest agentic/coding
+choices. That's it — every request Claude Code makes is now end-to-end encrypted
+to the PPQ enclave.
+
+**Verify the endpoint directly** (Anthropic Messages format):
+
+```bash
+curl http://127.0.0.1:8787/v1/messages \
+  -H "Content-Type: application/json" \
+  -d '{"model":"private/kimi-k2-6","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}'
+```
+
 ## How This proxy repo works
 
 The code in this runs a local proxy on your machine (port 8787) that:

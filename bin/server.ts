@@ -35,10 +35,17 @@ const proxy = await startProxy(
 );
 
 console.log("");
-console.log("Send a test request:");
+console.log("Send a test request (OpenAI format):");
 console.log(`  curl http://127.0.0.1:${proxy.port}/v1/chat/completions \\`);
 console.log(`    -H "Content-Type: application/json" \\`);
 console.log(`    -d '{"model":"private/kimi-k2-6","messages":[{"role":"user","content":"Hello"}]}'`);
+console.log("");
+console.log("Use with Claude Code (Anthropic format, POST /v1/messages):");
+console.log(`  export ANTHROPIC_BASE_URL="http://127.0.0.1:${proxy.port}"`);
+console.log(`  export ANTHROPIC_AUTH_TOKEN="$PPQ_API_KEY"`);
+console.log(`  export ANTHROPIC_MODEL="private/kimi-k2-6"`);
+console.log(`  export ANTHROPIC_SMALL_FAST_MODEL="private/kimi-k2-6"`);
+console.log(`  claude`);
 console.log("");
 
 // Graceful shutdown
