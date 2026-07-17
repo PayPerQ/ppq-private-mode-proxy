@@ -1,6 +1,6 @@
 {
   "name": "ppq-private-mode",
-  "version": "0.2.3",
+  "version": "0.3.2",
   "type": "module",
   "description": "End-to-end encrypted AI proxy for PPQ.AI private models. Works standalone or as an OpenClaw plugin.",
   "openclaw": {
@@ -29,6 +29,11 @@
   },
   "peerDependencies": {
     "openclaw": ">=2026.1.0"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "tsx": "^4.0.0",

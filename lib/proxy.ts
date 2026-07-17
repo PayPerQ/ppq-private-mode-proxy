@@ -158,6 +158,18 @@ function computeUpstreamAuth(req: http.IncomingMessage, config: ProxyConfig): st
   return forwardable ? trimmedAuth : `Bearer ${config.apiKey}`;
 }
 
+/**
+ * Extract a creator-payout tool id (e.g. "stt:ppq-voice") from the incoming
+ * `X-Tool-Id` header so PPQ can pay the registered tool creator for the
+ * request. The request body is encrypted before it reaches PPQ, so this is
+ * forwarded as a cleartext metadata header alongside X-Private-Model. Only a
+ * single conservatively-shaped value is forwarded; anything else is dropped.
+ */
+function computeToolId(req: http.IncomingMessage): string | null {
+  const incoming = req.headers["x-tool-id"];
+  return typeof incoming === "string" && /^[\w:.-]{1,64}$/.test(incoming) ? incoming : null;
+}
+
 // ─── Proxy server ────────────────────────────────────────────────────────────
 
 export async function startProxy(config: ProxyConfig, logger: Logger): Promise<ProxyHandle> {
@@ -195,16 +207,21 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
   function forwardEncrypted(
     openaiBody: Record<string, unknown>,
     modelId: string,
-    upstreamAuth: string
+    upstreamAuth: string,
+    toolId: string | null = null
   ): Promise<Response> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Authorization: upstreamAuth,
+      "X-Private-Model": modelId,
+      "x-query-source": "api",
+    };
+    if (toolId) {
+      headers["X-Tool-Id"] = toolId;
+    }
     return encryptedFetch(`${apiBase}/private/v1/chat/completions`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: upstreamAuth,
-        "X-Private-Model": modelId,
-        "x-query-source": "api",
-      },
+      headers,
       body: JSON.stringify(openaiBody),
     });
   }
@@ -213,7 +230,10 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
     // CORS headers
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Tool-Id"
+    );
 
     if (req.method === "OPTIONS") {
       res.writeHead(204);
@@ -269,7 +289,8 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
         const response = await forwardEncrypted(
           parsed,
           resolved.modelId,
-          computeUpstreamAuth(req, config)
+          computeUpstreamAuth(req, config),
+          computeToolId(req)
         );
 
         // Forward status and headers
@@ -327,7 +348,8 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
         const response = await forwardEncrypted(
           openaiBody,
           resolved.modelId,
-          computeUpstreamAuth(req, config)
+          computeUpstreamAuth(req, config),
+          computeToolId(req)
         );
 
         const messageId = newMessageId();
