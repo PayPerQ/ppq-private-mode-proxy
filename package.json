@@ -12,10 +12,10 @@
     "ppq-private-proxy": "./dist/bin/server.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node --input-type=module -e \"import{cpSync}from'node:fs';cpSync('lib/nitro','dist/lib/nitro',{recursive:true})\"",
     "start": "npx tsx bin/server.ts",
-    "prepare": "tsc",
-    "prepublishOnly": "tsc"
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build"
   },
   "files": [
     "dist",
@@ -24,6 +24,9 @@
     "README.md"
   ],
   "dependencies": {
+    "@peculiar/x509": "^1.14.3",
+    "cbor-x": "^1.6.4",
+    "ehbp": "^0.2.0",
     "tinfoil": "^1.0.0",
     "zod": "^4.0.0"
   },

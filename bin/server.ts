@@ -6,10 +6,14 @@
  *   PPQ_API_KEY=sk-xxx npx tsx bin/server.ts
  *
  * Environment variables:
- *   PPQ_API_KEY   (required) — Your PPQ.AI API key from https://ppq.ai/api-docs
- *   PORT          (optional) — Proxy port, default 8787
- *   PPQ_API_BASE  (optional) — API base URL, default https://api.ppq.ai
- *   DEBUG         (optional) — Set to "true" for verbose logging
+ *   PPQ_API_KEY      (required) — Your PPQ.AI API key from https://ppq.ai/api-docs
+ *   PORT             (optional) — Proxy port, default 8787
+ *   PPQ_API_BASE     (optional) — API base URL, default https://api.ppq.ai
+ *   DEBUG            (optional) — Set to "true" for verbose logging
+ *   PPQ_ENCLAVE_URL  (experimental) — Nitro enclave base URL, e.g. https://enclave.ppq.ai
+ *   PPQ_ENCLAVE_PCR0 (experimental) — pinned enclave PCR0. Both must be set to
+ *                                     route non-private models through the enclave;
+ *                                     otherwise the proxy stays Tinfoil-only.
  */
 
 import { startProxy } from "../lib/proxy.js";
@@ -24,9 +28,13 @@ if (!apiKey) {
 const port = parseInt(process.env.PORT || "8787", 10);
 const apiBase = process.env.PPQ_API_BASE || "https://api.ppq.ai";
 const debug = process.env.DEBUG === "true";
+// PHASED / dormant: the Nitro enclave backend is used only when BOTH are set.
+// Unset (default) => Tinfoil-only, exactly as before.
+const enclaveUrl = process.env.PPQ_ENCLAVE_URL;
+const enclavePcr0 = process.env.PPQ_ENCLAVE_PCR0;
 
 const proxy = await startProxy(
-  { apiKey, port, apiBase, debug },
+  { apiKey, port, apiBase, debug, enclaveUrl, enclavePcr0 },
   {
     info: (msg) => console.log(msg),
     error: (msg) => console.error(msg),
