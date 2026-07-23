@@ -18,6 +18,19 @@
 
 import { startProxy } from "../lib/proxy.js";
 
+// The Tinfoil verifier and our EHBP client need the global WebCrypto, which only
+// exists on Node 20+. On older Node the attestation fails DEEP inside the SDK
+// with a misleading "AMD certificate chain verification failed" (the real cause
+// is `ReferenceError: crypto is not defined`). Guard early with a clear message.
+const nodeMajor = Number(process.versions.node.split(".")[0]);
+if (Number.isFinite(nodeMajor) && nodeMajor < 20) {
+  console.error(
+    `Error: ppq-private-mode requires Node.js 20+ (you are running ${process.version}).`
+  );
+  console.error("Upgrade Node (e.g. `nvm install 20`) and re-run.");
+  process.exit(1);
+}
+
 const apiKey = process.env.PPQ_API_KEY;
 if (!apiKey) {
   console.error("Error: PPQ_API_KEY environment variable is required");
