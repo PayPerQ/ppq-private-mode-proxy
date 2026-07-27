@@ -71,8 +71,20 @@ const response = await client.chat.completions.create({
 |---|---|---|---|
 | `PPQ_API_KEY` | Yes | — | Your PPQ.AI API key |
 | `PORT` | No | `8787` | Local proxy port |
+| `HOST` | No | `127.0.0.1` | Bind address (use `0.0.0.0` inside containers) |
 | `PPQ_API_BASE` | No | `https://api.ppq.ai` | PPQ API base URL |
 | `DEBUG` | No | `false` | Set to `true` for verbose logging |
+
+# Docker usage
+
+```bash
+docker build -t ppq-private-mode .
+docker run -d -e PPQ_API_KEY=sk-your-key -p 8787:8787 ppq-private-mode
+curl http://127.0.0.1:8787/health   # → {"status":"ok","attestation":true}
+```
+
+The image binds to `0.0.0.0` inside the container and exposes port 8787, with a
+built-in health check against `GET /health`.
 
 # Claude Code usage
 

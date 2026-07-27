@@ -38,6 +38,8 @@ export interface ProxyConfig {
   port: number;
   apiBase: string;
   debug: boolean;
+  /** Bind address. Defaults to 127.0.0.1; set to 0.0.0.0 when running in a container. */
+  host?: string;
 }
 
 export interface ProxyHandle {
@@ -175,6 +177,7 @@ function computeToolId(req: http.IncomingMessage): string | null {
 export async function startProxy(config: ProxyConfig, logger: Logger): Promise<ProxyHandle> {
   const port = config.port || DEFAULT_PORT;
   const apiBase = config.apiBase || DEFAULT_API_BASE;
+  const host = config.host || "127.0.0.1";
 
   // Dynamic import to avoid loading at module level
   const { SecureClient: SC } = await import("tinfoil");
@@ -401,8 +404,8 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
   // Start listening
   await new Promise<void>((resolve, reject) => {
     server.on("error", reject);
-    server.listen(port, "127.0.0.1", () => {
-      logger.info(`PPQ Private Mode proxy listening on http://127.0.0.1:${port}`);
+    server.listen(port, host, () => {
+      logger.info(`PPQ Private Mode proxy listening on http://${host}:${port}`);
       logger.info(
         `Endpoints: GET /v1/models, POST /v1/chat/completions (OpenAI), POST /v1/messages (Anthropic)`
       );

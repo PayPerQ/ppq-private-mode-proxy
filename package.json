@@ -3,6 +3,7 @@
   "version": "0.3.2",
   "type": "module",
   "description": "End-to-end encrypted AI proxy for PPQ.AI private models. Works standalone or as an OpenClaw plugin.",
+  "license": "MIT",
   "openclaw": {
     "extensions": [
       "./dist/index.js"

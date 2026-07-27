@@ -8,6 +8,7 @@
  * Environment variables:
  *   PPQ_API_KEY   (required) — Your PPQ.AI API key from https://ppq.ai/api-docs
  *   PORT          (optional) — Proxy port, default 8787
+ *   HOST          (optional) — Bind address, default 127.0.0.1 (use 0.0.0.0 in containers)
  *   PPQ_API_BASE  (optional) — API base URL, default https://api.ppq.ai
  *   DEBUG         (optional) — Set to "true" for verbose logging
  */
@@ -22,11 +23,12 @@ if (!apiKey) {
 }
 
 const port = parseInt(process.env.PORT || "8787", 10);
+const host = process.env.HOST || "127.0.0.1";
 const apiBase = process.env.PPQ_API_BASE || "https://api.ppq.ai";
 const debug = process.env.DEBUG === "true";
 
 const proxy = await startProxy(
-  { apiKey, port, apiBase, debug },
+  { apiKey, port, host, apiBase, debug },
   {
     info: (msg) => console.log(msg),
     error: (msg) => console.error(msg),
