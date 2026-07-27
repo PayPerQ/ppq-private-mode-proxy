@@ -5,14 +5,16 @@ COPY package.json package-lock.json tsconfig.json ./
 COPY bin ./bin
 COPY lib ./lib
 COPY index.ts ./
-RUN npm ci
+# --omit=peer: the optional openclaw peer dependency (and its ~600 MB tree) is
+# only needed for plugin mode, never for the standalone proxy
+RUN npm ci --omit=peer
 
 # Runtime stage: production dependencies only
 FROM node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+RUN npm ci --omit=dev --omit=peer --ignore-scripts && npm cache clean --force
 COPY --from=build /app/dist ./dist
 
 # Bind to all interfaces inside the container; publish the port to reach it
