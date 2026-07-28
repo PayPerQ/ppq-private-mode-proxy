@@ -6,19 +6,27 @@
  *   PPQ_API_KEY=sk-xxx npx tsx bin/server.ts
  *
  * Environment variables:
- *   PPQ_API_KEY   (required) — Your PPQ.AI API key from https://ppq.ai/api-docs
+ *   PPQ_API_KEY   (optional*) — Your PPQ.AI API key from https://ppq.ai/api-docs
+ *   PPQ_DATA_DIR  (optional*) — Directory for persistent config; enables saving
+ *                               the API key from the status page in a browser
  *   PORT          (optional) — Proxy port, default 8787
  *   HOST          (optional) — Bind address, default 127.0.0.1 (use 0.0.0.0 in containers)
  *   PPQ_API_BASE  (optional) — API base URL, default https://api.ppq.ai
  *   DEBUG         (optional) — Set to "true" for verbose logging
+ *
+ *   *At least one of PPQ_API_KEY / PPQ_DATA_DIR is required.
  */
 
 import { startProxy } from "../lib/proxy.js";
 
 const apiKey = process.env.PPQ_API_KEY;
-if (!apiKey) {
+const dataDir = process.env.PPQ_DATA_DIR;
+if (!apiKey && !dataDir) {
   console.error("Error: PPQ_API_KEY environment variable is required");
   console.error("Get your API key from https://ppq.ai/api-docs");
+  console.error(
+    "(Or set PPQ_DATA_DIR to a writable directory to configure the key from the status page.)"
+  );
   process.exit(1);
 }
 
@@ -28,7 +36,7 @@ const apiBase = process.env.PPQ_API_BASE || "https://api.ppq.ai";
 const debug = process.env.DEBUG === "true";
 
 const proxy = await startProxy(
-  { apiKey, port, host, apiBase, debug },
+  { apiKey, port, host, apiBase, debug, dataDir },
   {
     info: (msg) => console.log(msg),
     error: (msg) => console.error(msg),

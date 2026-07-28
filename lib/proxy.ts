@@ -22,6 +22,8 @@
  */
 
 import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
 import type { SecureClient, VerificationDocument } from "tinfoil";
 import {
   anthropicToOpenAI,
@@ -30,16 +32,28 @@ import {
   newMessageId,
   type AnthropicRequest,
 } from "./anthropic.js";
+import { renderStatusPage } from "./statusPage.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface ProxyConfig {
-  apiKey: string;
+  /**
+   * Default PPQ.AI API key requests are billed to. Optional when `dataDir` is
+   * set — the key can then be provided via the setup form on the status page
+   * and is persisted to `<dataDir>/config.json`.
+   */
+  apiKey?: string;
   port: number;
   apiBase: string;
   debug: boolean;
   /** Bind address. Defaults to 127.0.0.1; set to 0.0.0.0 when running in a container. */
   host?: string;
+  /**
+   * Directory for persistent proxy config. When set, the status page offers a
+   * setup form that saves the API key to `<dataDir>/config.json`, and a key
+   * stored there is loaded at startup (an explicit `apiKey` takes precedence).
+   */
+  dataDir?: string;
 }
 
 export interface ProxyHandle {
@@ -60,6 +74,10 @@ export interface Logger {
 const DEFAULT_PORT = 8787;
 const DEFAULT_API_BASE = "https://api.ppq.ai";
 const HEALTH_TIMEOUT_MS = 15_000;
+
+const NO_KEY_MESSAGE =
+  "No PPQ.AI API key configured. Save one on the proxy's status page, set the " +
+  "PPQ_API_KEY environment variable, or pass a key as an Authorization: Bearer header.";
 
 /** Maps user-facing model IDs to enclave-internal model IDs */
 const PRIVATE_MODEL_MAP: Record<string, string> = {
@@ -151,13 +169,71 @@ function resolveModel(rawModel: unknown): ResolvedModel | null {
  * ones ("Bearer sk-no-key-required"). Forwarding any of those upstream overrode
  * PPQ_API_KEY and produced a plaintext 401, which the EHBP client surfaced as
  * the misleading "missing ehbp-response-nonce header" ProtocolError. Anything
- * that isn't a real PPQ key falls back to the key the proxy was started with.
+ * that isn't a real PPQ key falls back to the proxy's configured key; null when
+ * no key is available at all (the caller must answer 401).
  */
-function computeUpstreamAuth(req: http.IncomingMessage, config: ProxyConfig): string {
+function computeUpstreamAuth(
+  req: http.IncomingMessage,
+  configuredKey: string | undefined
+): string | null {
   const incomingAuth = req.headers["authorization"];
   const trimmedAuth = typeof incomingAuth === "string" ? incomingAuth.trim() : "";
   const forwardable = /^Bearer\s+sk-[A-Za-z0-9]{22}$/.test(trimmedAuth);
-  return forwardable ? trimmedAuth : `Bearer ${config.apiKey}`;
+  if (forwardable) return trimmedAuth;
+  return configuredKey ? `Bearer ${configuredKey}` : null;
+}
+
+// ─── Persistent key store ────────────────────────────────────────────────────
+
+/** Shape check for keys accepted by the setup endpoint (tolerant on length). */
+const KEY_SHAPE = /^sk-[A-Za-z0-9]{16,64}$/;
+
+/**
+ * Holds the proxy's default API key. When a data directory is configured the
+ * key survives restarts in `<dataDir>/config.json`; setting a new key takes
+ * effect immediately without a restart.
+ */
+class KeyStore {
+  private key: string | undefined;
+  private readonly configFile: string | null;
+
+  constructor(explicitKey: string | undefined, dataDir: string | undefined, logger: Logger) {
+    this.configFile = dataDir ? path.join(dataDir, "config.json") : null;
+    this.key = explicitKey;
+    if (!this.key && this.configFile) {
+      try {
+        const raw = JSON.parse(fs.readFileSync(this.configFile, "utf-8"));
+        if (typeof raw?.apiKey === "string" && raw.apiKey) {
+          this.key = raw.apiKey;
+          logger.info(`Loaded API key from ${this.configFile}`);
+        }
+      } catch {
+        // Missing or unreadable config — start unconfigured.
+      }
+    }
+  }
+
+  get(): string | undefined {
+    return this.key;
+  }
+
+  get persistent(): boolean {
+    return this.configFile !== null;
+  }
+
+  /** Validate, persist (when possible), and activate a new key. */
+  set(apiKey: string): void {
+    if (!KEY_SHAPE.test(apiKey)) {
+      throw new Error("That doesn't look like a PPQ.AI API key (expected sk-…).");
+    }
+    if (this.configFile) {
+      fs.mkdirSync(path.dirname(this.configFile), { recursive: true });
+      fs.writeFileSync(this.configFile, JSON.stringify({ apiKey }, null, 2) + "\n", {
+        mode: 0o600,
+      });
+    }
+    this.key = apiKey;
+  }
 }
 
 /**
@@ -178,6 +254,7 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
   const port = config.port || DEFAULT_PORT;
   const apiBase = config.apiBase || DEFAULT_API_BASE;
   const host = config.host || "127.0.0.1";
+  const keyStore = new KeyStore(config.apiKey, config.dataDir, logger);
 
   // Dynamic import to avoid loading at module level
   const { SecureClient: SC } = await import("tinfoil");
@@ -246,10 +323,64 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
 
     const url = new URL(req.url || "/", `http://127.0.0.1:${port}`);
 
+    // GET / — human-facing status & setup page
+    if (url.pathname === "/" && req.method === "GET") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(
+        renderStatusPage({
+          attested: !!verification,
+          enclaveHost: verification?.enclaveHost,
+          codeFingerprint: verification?.codeFingerprint,
+          keyConfigured: !!keyStore.get(),
+          setupEnabled: keyStore.persistent,
+          models: PRIVATE_MODELS,
+        })
+      );
+      return;
+    }
+
     // GET /health
-    if (url.pathname === "/health" || url.pathname === "/") {
+    if (url.pathname === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok", attestation: !!verification }));
+      res.end(
+        JSON.stringify({
+          status: "ok",
+          attestation: !!verification,
+          apiKeyConfigured: !!keyStore.get(),
+        })
+      );
+      return;
+    }
+
+    // POST /setup/api-key — save the default key (only with persistent config)
+    if (url.pathname === "/setup/api-key" && req.method === "POST") {
+      if (!keyStore.persistent) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            error: {
+              message:
+                "Setup is disabled: the proxy was started without a data directory (PPQ_DATA_DIR).",
+              type: "invalid_request_error",
+            },
+          })
+        );
+        return;
+      }
+      try {
+        const body = JSON.parse(await readBody(req));
+        keyStore.set(typeof body?.apiKey === "string" ? body.apiKey.trim() : "");
+        logger.info("API key saved via setup page");
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err: any) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            error: { message: err?.message || "Invalid request", type: "invalid_request_error" },
+          })
+        );
+      }
       return;
     }
 
@@ -283,6 +414,20 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
         // Map to enclave-internal model ID
         parsed.model = resolved.enclaveModelId;
 
+        const upstreamAuth = computeUpstreamAuth(req, keyStore.get());
+        if (!upstreamAuth) {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              error: {
+                message: NO_KEY_MESSAGE,
+                type: "authentication_error",
+              },
+            })
+          );
+          return;
+        }
+
         if (config.debug) {
           logger.debug?.(
             `→ [openai] ${resolved.modelId} (enclave: ${resolved.enclaveModelId}), stream: ${!!parsed.stream}`
@@ -292,7 +437,7 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
         const response = await forwardEncrypted(
           parsed,
           resolved.modelId,
-          computeUpstreamAuth(req, config),
+          upstreamAuth,
           computeToolId(req)
         );
 
@@ -342,6 +487,18 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
         const openaiBody = anthropicToOpenAI(anthropicReq);
         openaiBody.model = resolved.enclaveModelId;
 
+        const upstreamAuth = computeUpstreamAuth(req, keyStore.get());
+        if (!upstreamAuth) {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              type: "error",
+              error: { type: "authentication_error", message: NO_KEY_MESSAGE },
+            })
+          );
+          return;
+        }
+
         if (config.debug) {
           logger.debug?.(
             `→ [anthropic] ${resolved.modelId} (enclave: ${resolved.enclaveModelId}), stream: ${wantStream}`
@@ -351,7 +508,7 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
         const response = await forwardEncrypted(
           openaiBody,
           resolved.modelId,
-          computeUpstreamAuth(req, config),
+          upstreamAuth,
           computeToolId(req)
         );
 

@@ -69,11 +69,24 @@ const response = await client.chat.completions.create({
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `PPQ_API_KEY` | Yes | — | Your PPQ.AI API key |
+| `PPQ_API_KEY` | Yes* | — | Your PPQ.AI API key |
+| `PPQ_DATA_DIR` | No* | — | Directory for persistent config; enables saving the key from the status page |
 | `PORT` | No | `8787` | Local proxy port |
 | `HOST` | No | `127.0.0.1` | Bind address (use `0.0.0.0` inside containers) |
 | `PPQ_API_BASE` | No | `https://api.ppq.ai` | PPQ API base URL |
 | `DEBUG` | No | `false` | Set to `true` for verbose logging |
+
+\*At least one of `PPQ_API_KEY` / `PPQ_DATA_DIR` is required. With
+`PPQ_DATA_DIR` set, the proxy can start without a key: open the status page in
+a browser and save the key there — it persists to `<dir>/config.json` and takes
+effect immediately.
+
+# Status page
+
+`GET /` serves a human-facing status page: enclave attestation state, API key
+status, connection snippets, and the model list. When `PPQ_DATA_DIR` is set it
+also offers the API-key setup form (the saved key is never echoed back).
+`GET /health` remains machine-readable JSON.
 
 # Docker usage
 
