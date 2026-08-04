@@ -10,10 +10,8 @@
  *   PORT             (optional) — Proxy port, default 8787
  *   PPQ_API_BASE     (optional) — API base URL, default https://api.ppq.ai
  *   DEBUG            (optional) — Set to "true" for verbose logging
- *   PPQ_ENCLAVE_URL  (experimental) — Nitro enclave base URL, e.g. https://enclave.ppq.ai
- *   PPQ_ENCLAVE_PCR0 (experimental) — pinned enclave PCR0. Both must be set to
- *                                     route non-private models through the enclave;
- *                                     otherwise the proxy stays Tinfoil-only.
+ *   PPQ_ENCLAVE_URL  (optional) — override the Nitro enclave base URL (default: the published prod enclave)
+ *   PPQ_ENCLAVE_PCR0 (optional) — override the pinned enclave PCR0 (default: the published value)
  */
 
 import { startProxy } from "../lib/proxy.js";

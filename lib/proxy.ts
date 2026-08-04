@@ -65,6 +65,12 @@ export interface Logger {
 
 const DEFAULT_PORT = 8787;
 const DEFAULT_API_BASE = "https://api.ppq.ai";
+// Nitro-enclave backend defaults (BETA — on by default). Non-private models
+// route through this attested enclave; override with PPQ_ENCLAVE_URL / _PCR0.
+// Bump DEFAULT_ENCLAVE_PCR0 + republish whenever the enclave image changes.
+const DEFAULT_ENCLAVE_URL = "https://enclave.ppq.ai";
+const DEFAULT_ENCLAVE_PCR0 =
+  "d08345a22d2f263b4f1a5eff7562dc55914b353306b7a339267b8eff2128230f1e86b5e725b5e540872ad2ebf46cce44";
 const HEALTH_TIMEOUT_MS = 15_000;
 
 /** Maps user-facing model IDs to enclave-internal model IDs */
@@ -211,14 +217,16 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
 
   const encryptedFetch = client.fetch;
 
-  // ── Optional Nitro-enclave backend (PHASED — dormant unless configured) ──────
-  // Purely additive: the Tinfoil client above is untouched. This backend is
-  // enabled only when both config values are present, and any failure to bring
-  // it up is logged and swallowed so it can NEVER affect the Tinfoil path.
+  // ── Nitro-enclave backend (BETA — on by default) ─────────────────────────────
+  // Non-private models route through the attested PPQ enclave (defaults to the
+  // published prod enclave + pinned PCR0; override via PPQ_ENCLAVE_URL/_PCR0).
+  // Purely additive: the Tinfoil client above is untouched, and any failure to
+  // bring the enclave up is logged and swallowed so it can NEVER affect Tinfoil
+  // (private/* keep working; non-private models error until the enclave recovers).
   type EnclaveFetch = (url: string, init: RequestInit) => Promise<Response>;
   let enclaveFetch: EnclaveFetch | null = null;
-  const enclaveUrl = config.enclaveUrl;
-  const enclavePcr0 = config.enclavePcr0;
+  const enclaveUrl = config.enclaveUrl || DEFAULT_ENCLAVE_URL;
+  const enclavePcr0 = config.enclavePcr0 || DEFAULT_ENCLAVE_PCR0;
   if (enclaveUrl && enclavePcr0) {
     try {
       // Variable specifier: the vendored verifier is a dependency-free .mjs with
