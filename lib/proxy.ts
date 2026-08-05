@@ -70,7 +70,7 @@ const DEFAULT_API_BASE = "https://api.ppq.ai";
 // Bump DEFAULT_ENCLAVE_PCR0 + republish whenever the enclave image changes.
 const DEFAULT_ENCLAVE_URL = "https://enclave.ppq.ai";
 const DEFAULT_ENCLAVE_PCR0 =
-  "d08345a22d2f263b4f1a5eff7562dc55914b353306b7a339267b8eff2128230f1e86b5e725b5e540872ad2ebf46cce44";
+  "f7cd24f212096b8ad00614adf35d24825c517a4d8d62bdef7109771bcec3dd5511d6b3fe308d18681ed52e210057fc3d";
 const HEALTH_TIMEOUT_MS = 15_000;
 
 /** Maps user-facing model IDs to enclave-internal model IDs */
