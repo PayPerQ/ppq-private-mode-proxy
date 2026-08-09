@@ -37,7 +37,7 @@ The proxy starts on port 8787 and prints a ready message once attestation succee
 ```bash
 curl http://127.0.0.1:8787/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model":"private/kimi-k2-6","messages":[{"role":"user","content":"Hello"}]}'
+  -d '{"model":"private/kimi-k3","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
 The proxy bills against `PPQ_API_KEY` by default. To use a different key per request, pass it as a bearer token and the proxy will forward it instead:
@@ -46,7 +46,7 @@ The proxy bills against `PPQ_API_KEY` by default. To use a different key per req
 curl http://127.0.0.1:8787/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer sk-another-key" \
-  -d '{"model":"private/kimi-k2-6","messages":[{"role":"user","content":"Hello"}]}'
+  -d '{"model":"private/kimi-k3","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
 **Or point any OpenAI SDK at it:**
@@ -60,7 +60,7 @@ const client = new OpenAI({
 });
 
 const response = await client.chat.completions.create({
-  model: "private/kimi-k2-6",
+  model: "private/kimi-k3",
   messages: [{ role: "user", content: "Hello" }],
 });
 ```
@@ -127,10 +127,9 @@ claude
 
 **Use `private/glm-5-2` for Claude Code.** Claude Code drives everything through
 tool calls, and `glm-5-2`, `gpt-oss-120b`, and `llama3-3-70b` all emit tool
-calls correctly through the enclave. Avoid `private/kimi-k2-6` here — it does not
-currently return structured tool calls from the enclave, so Claude Code can't
-edit files or run commands with it (it's still fine for plain chat). Every
-request Claude Code makes is end-to-end encrypted to the PPQ enclave.
+calls correctly through the enclave, and `private/kimi-k3` advertises
+tool-calling support as well. Every request Claude Code makes is end-to-end
+encrypted to the PPQ enclave.
 
 **Verify the endpoint directly** (Anthropic Messages format):
 

@@ -9,7 +9,7 @@
  *   1. Copy this plugin directory to your OpenClaw plugins folder
  *   2. Run `npm install` in the plugin directory
  *   3. Add your PPQ API key in OpenClaw settings
- *   4. Set model to any private model (e.g. private/kimi-k2-6)
+ *   4. Set model to any private model (e.g. private/kimi-k3)
  */
 
 import { startProxy, type ProxyHandle, type ProxyConfig } from "./lib/proxy.js";
@@ -97,10 +97,9 @@ export default function register(api: any) {
                     chat: `http://127.0.0.1:${proxy.port}/v1/chat/completions`,
                   },
                   availableModels: [
-                    "private/kimi-k2-6",
+                    "private/kimi-k3",
                     "private/gpt-oss-120b",
                     "private/llama3-3-70b",
-                    "private/qwen3-vl-30b",
                     "private/glm-5-2",
                     "private/gemma4-31b",
                   ],
@@ -137,12 +136,12 @@ export default function register(api: any) {
       api: "openai-completions",
       models: [
         {
-          id: "private/kimi-k2-6",
-          name: "Kimi K2.6 (Private)",
-          reasoning: false,
+          id: "private/kimi-k3",
+          name: "Kimi K3 (Private)",
+          reasoning: true,
           input: ["text", "image"],
-          cost: { input: 1.58, output: 5.51, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: 262144,
+          cost: { input: 2.11, output: 6.33, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: 256000,
           maxTokens: 8192,
         },
         {
@@ -161,15 +160,6 @@ export default function register(api: any) {
           input: ["text"],
           cost: { input: 1.84, output: 2.89, cacheRead: 0, cacheWrite: 0 },
           contextWindow: 131072,
-          maxTokens: 8192,
-        },
-        {
-          id: "private/qwen3-vl-30b",
-          name: "Qwen3-VL 30B (Private)",
-          reasoning: false,
-          input: ["text", "image"],
-          cost: { input: 1.31, output: 4.20, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: 262144,
           maxTokens: 8192,
         },
         {
@@ -207,7 +197,7 @@ export default function register(api: any) {
           if (typeof key === "symbol") throw new Error("Setup cancelled");
           return {
             profiles: [{ profileId: "default", credential: { apiKey: key } }],
-            defaultModel: "private/kimi-k2-6",
+            defaultModel: "private/kimi-k3",
           };
         },
       },
