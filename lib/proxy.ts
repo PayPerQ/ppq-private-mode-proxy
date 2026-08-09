@@ -81,7 +81,7 @@ const NO_KEY_MESSAGE =
 
 /** Maps user-facing model IDs to enclave-internal model IDs */
 const PRIVATE_MODEL_MAP: Record<string, string> = {
-  "private/kimi-k2-6": "kimi-k2-6",
+  "private/kimi-k3": "kimi-k3",
   "private/gpt-oss-120b": "gpt-oss-120b",
   "private/llama3-3-70b": "llama3-3-70b",
   "private/qwen3-vl-30b": "qwen3-vl-30b",
@@ -97,7 +97,7 @@ const MODEL_LIST_RESPONSE = {
   object: "list",
   data: [
     {
-      id: "private/kimi-k2-6",
+      id: "private/kimi-k3",
       object: "model",
       created: 0,
       owned_by: "ppq-private",
@@ -138,9 +138,9 @@ const MODEL_LIST_RESPONSE = {
 // ─── Request helpers (shared by both dialects) ───────────────────────────────
 
 interface ResolvedModel {
-  /** User-facing id, e.g. "private/kimi-k2-6" — sent upstream as X-Private-Model. */
+  /** User-facing id, e.g. "private/kimi-k3" — sent upstream as X-Private-Model. */
   modelId: string;
-  /** Enclave-internal id, e.g. "kimi-k2-6" — placed in the request body. */
+  /** Enclave-internal id, e.g. "kimi-k3" — placed in the request body. */
   enclaveModelId: string;
 }
 
@@ -149,7 +149,7 @@ interface ResolvedModel {
  * "private/" prefix. Returns null when the model is not a known private model.
  */
 function resolveModel(rawModel: unknown): ResolvedModel | null {
-  let modelId = typeof rawModel === "string" && rawModel ? rawModel : "private/kimi-k2-6";
+  let modelId = typeof rawModel === "string" && rawModel ? rawModel : "private/kimi-k3";
   if (!PRIVATE_MODEL_MAP[modelId]) {
     const prefixed = `private/${modelId}`;
     if (PRIVATE_MODEL_MAP[prefixed]) {

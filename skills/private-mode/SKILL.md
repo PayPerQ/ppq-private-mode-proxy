@@ -53,7 +53,7 @@ Here is the complete config to merge (replace `USER_API_KEY` with the actual key
         "apiKey": "unused",
         "api": "openai-completions",
         "models": [
-          { "id": "private/kimi-k2-6", "name": "private/kimi-k2-6" },
+          { "id": "private/kimi-k3", "name": "private/kimi-k3" },
           { "id": "private/gpt-oss-120b", "name": "private/gpt-oss-120b" },
           { "id": "private/llama3-3-70b", "name": "private/llama3-3-70b" },
           { "id": "private/qwen3-vl-30b", "name": "private/qwen3-vl-30b" },
@@ -91,14 +91,14 @@ systemctl --user restart openclaw-gateway.service
 
 Tell the user PPQ Private Mode is configured. Available encrypted models:
 
-- `private/kimi-k2-6` -- Latest Kimi, native multimodal, strong coding, 262K context
+- `private/kimi-k3` -- Moonshot flagship multimodal MoE, reasoning, strong coding, 256K context
 - `private/gpt-oss-120b` -- Cost-efficient general use
 - `private/llama3-3-70b` -- Open-source tasks
 - `private/qwen3-vl-30b` -- Vision plus text, 262K context
 - `private/glm-5-2` -- Agentic engineering with long-horizon tool use, 384K context
 - `private/gemma4-31b` -- Vision plus text with thinking mode, 262K context
 
-Switch with: `openclaw models set private/kimi-k2-6`
+Switch with: `openclaw models set private/kimi-k3`
 
 ## Troubleshooting
 
