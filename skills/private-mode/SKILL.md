@@ -56,7 +56,6 @@ Here is the complete config to merge (replace `USER_API_KEY` with the actual key
           { "id": "private/kimi-k3", "name": "private/kimi-k3" },
           { "id": "private/gpt-oss-120b", "name": "private/gpt-oss-120b" },
           { "id": "private/llama3-3-70b", "name": "private/llama3-3-70b" },
-          { "id": "private/qwen3-vl-30b", "name": "private/qwen3-vl-30b" },
           { "id": "private/glm-5-2", "name": "private/glm-5-2" },
           { "id": "private/gemma4-31b", "name": "private/gemma4-31b" }
         ]
@@ -94,7 +93,6 @@ Tell the user PPQ Private Mode is configured. Available encrypted models:
 - `private/kimi-k3` -- Moonshot flagship multimodal MoE, reasoning, strong coding, 256K context
 - `private/gpt-oss-120b` -- Cost-efficient general use
 - `private/llama3-3-70b` -- Open-source tasks
-- `private/qwen3-vl-30b` -- Vision plus text, 262K context
 - `private/glm-5-2` -- Agentic engineering with long-horizon tool use, 384K context
 - `private/gemma4-31b` -- Vision plus text with thinking mode, 262K context
 

@@ -100,7 +100,6 @@ export default function register(api: any) {
                     "private/kimi-k3",
                     "private/gpt-oss-120b",
                     "private/llama3-3-70b",
-                    "private/qwen3-vl-30b",
                     "private/glm-5-2",
                     "private/gemma4-31b",
                   ],
@@ -161,15 +160,6 @@ export default function register(api: any) {
           input: ["text"],
           cost: { input: 1.84, output: 2.89, cacheRead: 0, cacheWrite: 0 },
           contextWindow: 131072,
-          maxTokens: 8192,
-        },
-        {
-          id: "private/qwen3-vl-30b",
-          name: "Qwen3-VL 30B (Private)",
-          reasoning: false,
-          input: ["text", "image"],
-          cost: { input: 1.31, output: 4.20, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: 262144,
           maxTokens: 8192,
         },
         {
