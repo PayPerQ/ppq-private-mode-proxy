@@ -134,13 +134,18 @@ export default function register(api: any) {
     models: {
       baseUrl: `http://127.0.0.1:${pluginConfig.port || 8787}`,
       api: "openai-completions",
+      // `cost` is what OpenClaw shows the user per 1M tokens. It must track
+      // PPQ's API-tier price: the Tinfoil rate card × the 1.055 API margin.
+      // Rate card: https://api.tinfoil.sh/api/config/models (last synced
+      // 2026-08-12, when Tinfoil corrected Kimi K3 from $2/$6 to $4/$20).
       models: [
         {
           id: "private/kimi-k3",
           name: "Kimi K3 (Private)",
           reasoning: true,
           input: ["text", "image"],
-          cost: { input: 2.11, output: 6.33, cacheRead: 0, cacheWrite: 0 },
+          // $4.00 / $20.00 × 1.055
+          cost: { input: 4.22, output: 21.1, cacheRead: 0, cacheWrite: 0 },
           contextWindow: 256000,
           maxTokens: 8192,
         },
@@ -149,7 +154,8 @@ export default function register(api: any) {
           name: "GPT-OSS 120B (Private)",
           reasoning: false,
           input: ["text"],
-          cost: { input: 0.79, output: 1.31, cacheRead: 0, cacheWrite: 0 },
+          // $0.15 / $0.60 × 1.055
+          cost: { input: 0.16, output: 0.63, cacheRead: 0, cacheWrite: 0 },
           contextWindow: 131072,
           maxTokens: 8192,
         },
@@ -158,7 +164,8 @@ export default function register(api: any) {
           name: "Llama 3.3 70B (Private)",
           reasoning: false,
           input: ["text"],
-          cost: { input: 1.84, output: 2.89, cacheRead: 0, cacheWrite: 0 },
+          // $1.75 / $2.75 × 1.055
+          cost: { input: 1.85, output: 2.9, cacheRead: 0, cacheWrite: 0 },
           contextWindow: 131072,
           maxTokens: 8192,
         },
@@ -167,7 +174,10 @@ export default function register(api: any) {
           name: "GLM-5.2 (Private)",
           reasoning: true,
           input: ["text"],
-          cost: { input: 1.58, output: 5.51, cacheRead: 0, cacheWrite: 0 },
+          // $1.50 / $5.25 × 1.055; cached input $0.375 × 1.055 — the only
+          // private model whose rate card prices a cache-read tier, and
+          // horse-power bills those attested cached tokens at it (hp #723).
+          cost: { input: 1.58, output: 5.54, cacheRead: 0.4, cacheWrite: 0 },
           contextWindow: 384000,
           maxTokens: 8192,
         },
@@ -176,7 +186,8 @@ export default function register(api: any) {
           name: "Gemma 4 31B (Private)",
           reasoning: true,
           input: ["text", "image"],
-          cost: { input: 0.47, output: 1.05, cacheRead: 0, cacheWrite: 0 },
+          // $0.40 / $1.00 × 1.055
+          cost: { input: 0.42, output: 1.06, cacheRead: 0, cacheWrite: 0 },
           contextWindow: 262144,
           maxTokens: 8192,
         },
