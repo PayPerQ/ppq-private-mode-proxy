@@ -102,6 +102,7 @@ export default function register(api: any) {
                     "private/llama3-3-70b",
                     "private/glm-5-2",
                     "private/gemma4-31b",
+                    "private/deepseek-v4-flash",
                   ],
                 }),
               },
@@ -189,6 +190,17 @@ export default function register(api: any) {
           // $0.40 / $1.00 × 1.055
           cost: { input: 0.42, output: 1.06, cacheRead: 0, cacheWrite: 0 },
           contextWindow: 262144,
+          maxTokens: 8192,
+        },
+        {
+          id: "private/deepseek-v4-flash",
+          name: "DeepSeek V4 Flash (Private)",
+          reasoning: true,
+          input: ["text"],
+          // $0.30 / $0.70 × 1.055; cached input $0.06 × 1.055 — horse-power
+          // bills the enclave's attested cached tokens at that tier (hp #723).
+          cost: { input: 0.32, output: 0.74, cacheRead: 0.06, cacheWrite: 0 },
+          contextWindow: 1048576,
           maxTokens: 8192,
         },
       ],

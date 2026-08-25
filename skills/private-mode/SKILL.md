@@ -57,7 +57,8 @@ Here is the complete config to merge (replace `USER_API_KEY` with the actual key
           { "id": "private/gpt-oss-120b", "name": "private/gpt-oss-120b" },
           { "id": "private/llama3-3-70b", "name": "private/llama3-3-70b" },
           { "id": "private/glm-5-2", "name": "private/glm-5-2" },
-          { "id": "private/gemma4-31b", "name": "private/gemma4-31b" }
+          { "id": "private/gemma4-31b", "name": "private/gemma4-31b" },
+          { "id": "private/deepseek-v4-flash", "name": "private/deepseek-v4-flash" }
         ]
       }
     }
@@ -95,6 +96,7 @@ Tell the user PPQ Private Mode is configured. Available encrypted models:
 - `private/llama3-3-70b` -- Open-source tasks
 - `private/glm-5-2` -- Agentic engineering with long-horizon tool use, 384K context
 - `private/gemma4-31b` -- Vision plus text with thinking mode, 262K context
+- `private/deepseek-v4-flash` -- Fast, cost-efficient reasoning and coding, 1M context
 
 Switch with: `openclaw models set private/kimi-k3`
 

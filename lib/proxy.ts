@@ -86,6 +86,7 @@ const PRIVATE_MODEL_MAP: Record<string, string> = {
   "private/llama3-3-70b": "llama3-3-70b",
   "private/glm-5-2": "glm-5-2",
   "private/gemma4-31b": "gemma4-31b",
+  "private/deepseek-v4-flash": "deepseek-v4-flash",
 };
 
 /** All available private model IDs (user-facing) */
@@ -121,6 +122,12 @@ const MODEL_LIST_RESPONSE = {
     },
     {
       id: "private/gemma4-31b",
+      object: "model",
+      created: 0,
+      owned_by: "ppq-private",
+    },
+    {
+      id: "private/deepseek-v4-flash",
       object: "model",
       created: 0,
       owned_by: "ppq-private",
