@@ -54,6 +54,14 @@ export interface ProxyConfig {
    * stored there is loaded at startup (an explicit `apiKey` takes precedence).
    */
   dataDir?: string;
+  /**
+   * Optional Nitro-enclave backend (PHASED / dormant by default). When BOTH of
+   * these are set, models that are NOT `private/*` are routed through the
+   * attested PPQ Nitro enclave (the OpenRouter catalog). When either is unset —
+   * the default — the proxy is Tinfoil-only and behaves exactly as before.
+   */
+  enclaveUrl?: string;
+  enclavePcr0?: string;
 }
 
 export interface ProxyHandle {
@@ -73,6 +81,55 @@ export interface Logger {
 
 const DEFAULT_PORT = 8787;
 const DEFAULT_API_BASE = "https://api.ppq.ai";
+// Nitro-enclave backend (BETA — on by default). Non-private models route
+// through this attested enclave; override with PPQ_ENCLAVE_URL / _PCR0.
+const DEFAULT_ENCLAVE_URL = "https://enclave.ppq.ai";
+
+/**
+ * Where the expected measurement comes from.
+ *
+ * RESOLVED AT STARTUP, NOT COMPILED IN. The previous design was a constant with
+ * a comment saying "bump and republish whenever the enclave image changes", and
+ * that is exactly how it failed: the enclave rotated repeatedly, nobody
+ * republished, and the pin sat four measurements stale. A stale pin makes
+ * createNitroSecureFetch throw, the catch below nulls enclaveFetch, and the
+ * enclave path silently does not exist — degraded, not broken, which is why it
+ * went unnoticed for weeks.
+ *
+ * Reading the published record removes the coupling entirely: rotations need no
+ * republish, and the value comes from a public file in a public repository
+ * rather than from us (the same reasoning as PPQdotAI#2726 on the web client).
+ *
+ * The baked-in fallback stays for the offline case, and it is a FALLBACK rather
+ * than the source of truth — if it is stale, the enclave path degrades exactly
+ * as it does today, and private/* is unaffected either way.
+ */
+const PUBLISHED_PCR_URL =
+  "https://raw.githubusercontent.com/PayPerQ/ppq-enclave-proxy/main/attestation/published-pcr.json";
+const FALLBACK_ENCLAVE_PCR0 =
+  "f2d49c19d40cf8fa786ed6b1259604c01769d85582047e98e614ca74f3aab4374bffc335da35d208bc39fa7c168df22f";
+const PCR0_RE = /^[0-9a-f]{96}$/i;
+
+async function resolvePublishedPcr0(
+  logger?: { debug?: (m: string) => void }
+): Promise<string | null> {
+  try {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 5_000);
+    const res = await fetch(PUBLISHED_PCR_URL, { signal: ctl.signal });
+    clearTimeout(t);
+    if (!res.ok) return null;
+    const body = (await res.json()) as { current?: { pcr0?: unknown } };
+    const pcr0 = body?.current?.pcr0;
+    // Shape-check: a 200 carrying something that is not a measurement must not
+    // override the fallback, or the proxy attests against garbage and the
+    // enclave path disappears with a confusing error.
+    return typeof pcr0 === "string" && PCR0_RE.test(pcr0) ? pcr0.toLowerCase() : null;
+  } catch (err: any) {
+    logger?.debug?.(`published PCR0 lookup failed (${err?.message}); using fallback`);
+    return null;
+  }
+}
 const HEALTH_TIMEOUT_MS = 15_000;
 
 const NO_KEY_MESSAGE =
@@ -283,6 +340,42 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
 
   const encryptedFetch = client.fetch;
 
+  // ── Nitro-enclave backend (BETA — on by default) ─────────────────────────────
+  // Non-private models route through the attested PPQ enclave (defaults to the
+  // published prod enclave + pinned PCR0; override via PPQ_ENCLAVE_URL/_PCR0).
+  // Purely additive: the Tinfoil client above is untouched, and any failure to
+  // bring the enclave up is logged and swallowed so it can NEVER affect Tinfoil
+  // (private/* keep working; non-private models error until the enclave recovers).
+  type EnclaveFetch = (url: string, init: RequestInit) => Promise<Response>;
+  let enclaveFetch: EnclaveFetch | null = null;
+  const enclaveUrl = config.enclaveUrl || DEFAULT_ENCLAVE_URL;
+  // Explicit override wins; then the published record; then the baked-in value.
+  const enclavePcr0 =
+    config.enclavePcr0 || (await resolvePublishedPcr0(logger)) || FALLBACK_ENCLAVE_PCR0;
+  if (enclaveUrl && enclavePcr0) {
+    try {
+      // Variable specifier: the vendored verifier is a dependency-free .mjs with
+      // no types; a non-literal import keeps tsc from resolving it at build.
+      const nitroModule = "./nitro/nitro-secure-fetch.mjs";
+      const { createNitroSecureFetch } = await import(nitroModule);
+      const nitro = await createNitroSecureFetch({
+        baseURL: enclaveUrl,
+        expectedPcr0: enclavePcr0,
+      });
+      enclaveFetch = nitro.fetch as EnclaveFetch;
+      logger.info(
+        `Enclave backend enabled — ${enclaveUrl} (PCR0 ${enclavePcr0.slice(0, 16)}...${
+          enclavePcr0 === FALLBACK_ENCLAVE_PCR0 ? ", baked-in fallback" : ", published"
+        })`
+      );
+    } catch (err: any) {
+      logger.error(
+        `Enclave backend init failed (Tinfoil path unaffected): ${err?.message}`
+      );
+      enclaveFetch = null;
+    }
+  }
+
   /** Forward an OpenAI-format body to the enclave over the EHBP-encrypted channel. */
   function forwardEncrypted(
     openaiBody: Record<string, unknown>,
@@ -304,6 +397,48 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
       headers,
       body: JSON.stringify(openaiBody),
     });
+  }
+
+  /**
+   * Forward an OpenAI-format body to the Nitro enclave over ITS EHBP channel.
+   * The model passes through verbatim (the enclave accepts PPQ's short ids).
+   */
+  function forwardEnclave(
+    openaiBody: Record<string, unknown>,
+    upstreamAuth: string,
+    toolId: string | null = null
+  ): Promise<Response> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Authorization: upstreamAuth,
+      "x-query-source": "api",
+    };
+    if (toolId) headers["X-Tool-Id"] = toolId;
+    return enclaveFetch!(`${enclaveUrl}/v1/chat/completions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(openaiBody),
+    });
+  }
+
+  type Route =
+    | { backend: "tinfoil"; modelId: string; enclaveModelId: string }
+    | { backend: "enclave"; modelId: string };
+
+  /**
+   * Route an incoming model to a backend. `private/*` models ALWAYS go to
+   * Tinfoil (unchanged, checked first). Any other model routes to the enclave
+   * ONLY when that backend is configured; otherwise it's unknown → null (the
+   * same 400 as before). A missing/empty model still defaults to Tinfoil kimi
+   * via resolveModel, exactly as today.
+   */
+  function routeModel(rawModel: unknown): Route | null {
+    const priv = resolveModel(rawModel);
+    if (priv) return { backend: "tinfoil", ...priv };
+    if (enclaveFetch && typeof rawModel === "string" && rawModel) {
+      return { backend: "enclave", modelId: rawModel };
+    }
+    return null;
   }
 
   const server = http.createServer(async (req, res) => {
@@ -397,8 +532,8 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
         const body = await readBody(req);
         const parsed = JSON.parse(body);
 
-        const resolved = resolveModel(parsed.model);
-        if (!resolved) {
+        const routed = routeModel(parsed.model);
+        if (!routed) {
           res.writeHead(400, { "Content-Type": "application/json" });
           res.end(
             JSON.stringify({
@@ -411,9 +546,8 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
           return;
         }
 
-        // Map to enclave-internal model ID
-        parsed.model = resolved.enclaveModelId;
-
+        // Auth first: main added the explicit 401 rather than forwarding an
+        // unauthenticated request, and that applies to BOTH backends.
         const upstreamAuth = computeUpstreamAuth(req, keyStore.get());
         if (!upstreamAuth) {
           res.writeHead(401, { "Content-Type": "application/json" });
@@ -427,19 +561,26 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
           );
           return;
         }
-
-        if (config.debug) {
-          logger.debug?.(
-            `→ [openai] ${resolved.modelId} (enclave: ${resolved.enclaveModelId}), stream: ${!!parsed.stream}`
-          );
+        const toolId = computeToolId(req);
+        let response: Response;
+        if (routed.backend === "tinfoil") {
+          // Map to enclave-internal model ID (unchanged Tinfoil path)
+          parsed.model = routed.enclaveModelId;
+          if (config.debug) {
+            logger.debug?.(
+              `→ [openai] ${routed.modelId} (tinfoil: ${routed.enclaveModelId}), stream: ${!!parsed.stream}`
+            );
+          }
+          response = await forwardEncrypted(parsed, routed.modelId, upstreamAuth, toolId);
+        } else {
+          // Nitro enclave: model passes through verbatim
+          if (config.debug) {
+            logger.debug?.(
+              `→ [openai] ${routed.modelId} (nitro-enclave), stream: ${!!parsed.stream}`
+            );
+          }
+          response = await forwardEnclave(parsed, upstreamAuth, toolId);
         }
-
-        const response = await forwardEncrypted(
-          parsed,
-          resolved.modelId,
-          upstreamAuth,
-          computeToolId(req)
-        );
 
         // Forward status and headers
         const responseHeaders: Record<string, string> = {
@@ -468,8 +609,8 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
         const body = await readBody(req);
         const anthropicReq = JSON.parse(body) as AnthropicRequest;
 
-        const resolved = resolveModel(anthropicReq.model);
-        if (!resolved) {
+        const routed = routeModel(anthropicReq.model);
+        if (!routed) {
           res.writeHead(400, { "Content-Type": "application/json" });
           res.end(
             JSON.stringify({
@@ -485,32 +626,39 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
 
         const wantStream = !!anthropicReq.stream;
         const openaiBody = anthropicToOpenAI(anthropicReq);
-        openaiBody.model = resolved.enclaveModelId;
-
+        // Auth first: main added the explicit 401 rather than forwarding an
+        // unauthenticated request, and that applies to BOTH backends.
         const upstreamAuth = computeUpstreamAuth(req, keyStore.get());
         if (!upstreamAuth) {
           res.writeHead(401, { "Content-Type": "application/json" });
           res.end(
             JSON.stringify({
-              type: "error",
-              error: { type: "authentication_error", message: NO_KEY_MESSAGE },
+              error: {
+                message: NO_KEY_MESSAGE,
+                type: "authentication_error",
+              },
             })
           );
           return;
         }
-
-        if (config.debug) {
-          logger.debug?.(
-            `→ [anthropic] ${resolved.modelId} (enclave: ${resolved.enclaveModelId}), stream: ${wantStream}`
-          );
+        const toolId = computeToolId(req);
+        let response: Response;
+        if (routed.backend === "tinfoil") {
+          openaiBody.model = routed.enclaveModelId;
+          if (config.debug) {
+            logger.debug?.(
+              `→ [anthropic] ${routed.modelId} (tinfoil: ${routed.enclaveModelId}), stream: ${wantStream}`
+            );
+          }
+          response = await forwardEncrypted(openaiBody, routed.modelId, upstreamAuth, toolId);
+        } else {
+          // Nitro enclave: model passes through verbatim
+          openaiBody.model = routed.modelId;
+          if (config.debug) {
+            logger.debug?.(`→ [anthropic] ${routed.modelId} (nitro-enclave), stream: ${wantStream}`);
+          }
+          response = await forwardEnclave(openaiBody, upstreamAuth, toolId);
         }
-
-        const response = await forwardEncrypted(
-          openaiBody,
-          resolved.modelId,
-          upstreamAuth,
-          computeToolId(req)
-        );
 
         const messageId = newMessageId();
 
@@ -529,11 +677,11 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
             Connection: "keep-alive",
             "Access-Control-Allow-Origin": "*",
           });
-          await streamAnthropic(response, res, resolved.modelId, messageId);
+          await streamAnthropic(response, res, routed.modelId, messageId);
         } else {
           const text = await response.text();
           const oai = JSON.parse(text);
-          const anthropicResp = openAIToAnthropicResponse(oai, resolved.modelId, messageId);
+          const anthropicResp = openAIToAnthropicResponse(oai, routed.modelId, messageId);
           res.writeHead(response.status, {
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*",
