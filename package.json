@@ -1,7 +1,10 @@
 {
   "name": "ppq-private-mode",
-  "version": "0.4.3",
+  "version": "0.5.0-beta.0",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "description": "End-to-end encrypted AI proxy for PPQ.AI private models. Works standalone or as an OpenClaw plugin.",
   "license": "MIT",
   "openclaw": {
@@ -13,10 +16,10 @@
     "ppq-private-proxy": "./dist/bin/server.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node --input-type=module -e \"import{cpSync}from'node:fs';cpSync('lib/nitro','dist/lib/nitro',{recursive:true})\"",
     "start": "npx tsx bin/server.ts",
-    "prepare": "tsc",
-    "prepublishOnly": "tsc"
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build"
   },
   "files": [
     "dist",
@@ -25,7 +28,10 @@
     "README.md"
   ],
   "dependencies": {
-    "tinfoil": "^1.0.0",
+    "@peculiar/x509": "^1.14.3",
+    "cbor-x": "^1.6.4",
+    "ehbp": "^0.2.0",
+    "tinfoil": "^1.1.11",
     "zod": "^4.0.0"
   },
   "peerDependencies": {
@@ -37,8 +43,8 @@
     }
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "tsx": "^4.0.0",
-    "typescript": "^5.7.0",
-    "@types/node": "^22.0.0"
+    "typescript": "^5.7.0"
   }
 }
