@@ -15,6 +15,12 @@
  *   DEBUG            (optional) — Set to "true" for verbose logging
  *   PPQ_ENCLAVE_URL  (optional) — override the Nitro enclave base URL (default: the published prod enclave)
  *   PPQ_ENCLAVE_PCR0 (optional) — override the pinned enclave PCR0 (default: the published value)
+ *   PPQ_ALLOWED_ORIGINS (optional) — comma-separated browser origins allowed to call
+ *                                  the proxy, e.g. "http://localhost:3000". Empty by
+ *                                  default; local programs need no entry here.
+ *   PPQ_ALLOWED_HOSTS   (optional) — comma-separated Host header values to accept.
+ *                                  Set this when publishing the port on a network
+ *                                  interface; it is what blocks DNS rebinding there.
  *
  *   *At least one of PPQ_API_KEY / PPQ_DATA_DIR is required.
  */
@@ -53,9 +59,19 @@ const debug = process.env.DEBUG === "true";
 // Unset (default) => Tinfoil-only, exactly as before.
 const enclaveUrl = process.env.PPQ_ENCLAVE_URL;
 const enclavePcr0 = process.env.PPQ_ENCLAVE_PCR0;
+// Opt-in only. Without this the proxy serves local programs and its own status
+// page, which is what every documented client does (issue #28).
+const allowedOrigins = (process.env.PPQ_ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+const allowedHosts = (process.env.PPQ_ALLOWED_HOSTS || "")
+  .split(",")
+  .map((h) => h.trim())
+  .filter(Boolean);
 
 const proxy = await startProxy(
-  { apiKey, port, host, apiBase, debug, dataDir, enclaveUrl, enclavePcr0 },
+  { apiKey, port, host, apiBase, debug, dataDir, enclaveUrl, enclavePcr0, allowedOrigins, allowedHosts },
   {
     info: (msg) => console.log(msg),
     error: (msg) => console.error(msg),

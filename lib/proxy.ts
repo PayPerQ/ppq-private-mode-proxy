@@ -62,6 +62,21 @@ export interface ProxyConfig {
    */
   enclaveUrl?: string;
   enclavePcr0?: string;
+  /**
+   * Web origins explicitly permitted to call the proxy from a browser, e.g.
+   * ["http://localhost:3000"]. Empty by default: the proxy answers local
+   * programs (curl, the SDKs, Claude Code), which send no Origin at all, and
+   * its own same-origin status page. Anything listed here additionally gets
+   * real CORS headers. See issue #28 for why the previous wildcard was unsafe.
+   */
+  allowedOrigins?: string[];
+  /**
+   * Host header values this proxy answers to, e.g. ["ppq-proxy.local:8787"].
+   * Only needed when the proxy is published on a network interface: it pins the
+   * name clients use and thereby blocks DNS rebinding, which no origin check
+   * can catch because a rebound request looks same-origin.
+   */
+  allowedHosts?: string[];
 }
 
 export interface ProxyHandle {
@@ -305,6 +320,194 @@ function computeToolId(req: http.IncomingMessage): string | null {
   return typeof incoming === "string" && /^[\w:.-]{1,64}$/.test(incoming) ? incoming : null;
 }
 
+// ─── Browser-request guard ───────────────────────────────────────────────────
+
+/**
+ * Why this exists (issue #28).
+ *
+ * The proxy holds the user's API key and answers on loopback, and the previous
+ * code treated "arrived on loopback" as "came from the user". It does not: the
+ * user's BROWSER runs on the same machine, so any page they visit can reach
+ * 127.0.0.1. Combined with the wildcard `Access-Control-Allow-Origin: *` that
+ * used to be sent on every response, a hostile page could spend the user's
+ * balance and read the replies.
+ *
+ * Note that dropping the wildcard is NOT sufficient on its own. Both POST
+ * handlers parse JSON without inspecting Content-Type, and the content types an
+ * HTML form can produce are "CORS-simple" — the browser sends them with no
+ * preflight, so the CORS policy never gated them. A blind form POST still
+ * executed and still billed. Rejecting those content types is the load-bearing
+ * half of this fix; the CORS change only stops the attacker reading replies.
+ */
+
+/** Content types a cross-site HTML form can produce without a preflight. */
+const FORM_CONTENT_TYPES = [
+  "text/plain",
+  "application/x-www-form-urlencoded",
+  "multipart/form-data",
+];
+
+function contentTypeOf(req: http.IncomingMessage): string {
+  const raw = req.headers["content-type"];
+  return (typeof raw === "string" ? raw.split(";")[0] : "").trim().toLowerCase();
+}
+
+/** 127.0.0.0/8 in dotted or shorthand form ("127.1", "127.0.1"), range-checked. */
+function isLoopbackIPv4(addr: string): boolean {
+  const parts = addr.split(".");
+  if (parts.length < 2 || parts.length > 4) return false;
+  if (!parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255)) return false;
+  return parts[0] === "127";
+}
+
+/**
+ * True for 127.0.0.0/8, ::1 and localhost, tolerating brackets and a trailing
+ * root dot. Shorthand spellings matter: `HOST=127.1` is a valid loopback bind,
+ * and mis-classifying it as non-loopback would silently disable Host
+ * validation, which is the opposite of the intended failure direction.
+ */
+function isLoopbackHostname(hostname: string): boolean {
+  const h = hostname.trim().toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  if (h === "localhost") return true;
+  if (h.includes(":")) {
+    const mapped = h.match(/^::ffff:([\d.]+)$/);
+    if (mapped) return isLoopbackIPv4(mapped[1]);
+    return h === "::1" || /^(?:0{1,4}:){7}0{0,3}1$/.test(h);
+  }
+  return isLoopbackIPv4(h);
+}
+
+/**
+ * Same-origin test done by comparing the Origin against the request's OWN Host
+ * rather than a fixed list. An allowlist of "127.0.0.1" would reject a user who
+ * browsed to "localhost" (or ::1) — a different origin as far as the browser is
+ * concerned — and could not know the hostname a container is reached under.
+ */
+function isSameOrigin(origin: string, req: http.IncomingMessage): boolean {
+  const host = typeof req.headers.host === "string" ? req.headers.host : "";
+  if (!host) return false;
+  try {
+    return new URL(origin).host.toLowerCase() === host.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
+/** http(s) origins are web pages. `null`, `file://`, `app://` etc. are not. */
+function isWebOrigin(origin: string): boolean {
+  try {
+    const proto = new URL(origin).protocol;
+    return proto === "http:" || proto === "https:";
+  } catch {
+    return false;
+  }
+}
+
+interface GuardOptions {
+  allowedOrigins: Set<string>;
+  /**
+   * Operator-declared Host values. When non-empty these are authoritative and
+   * are checked whatever the bind address is — the remedy for DNS rebinding
+   * against a proxy published on a network interface, where the bind address
+   * tells us nothing about which Host is legitimate.
+   */
+  allowedHosts: Set<string>;
+  /** Loopback bind: enforce loopback Host. See guardRequest step 1. */
+  enforceHost: boolean;
+  /** Reject anything that is not application/json (setup endpoint only). */
+  requireJson: boolean;
+  /**
+   * Reject ANY non-same-origin Origin, including non-web schemes. Used for the
+   * key-write endpoint, which only ever legitimately receives the proxy's own
+   * status page.
+   */
+  strictOrigin: boolean;
+}
+
+/** Returns a rejection, or null when the request may proceed. */
+function guardRequest(
+  req: http.IncomingMessage,
+  opts: GuardOptions
+): { status: number; message: string } | null {
+  // 1. Host — DNS rebinding re-points a hostname the attacker controls at
+  // 127.0.0.1, which makes their page same-origin with us and defeats every
+  // origin check below. Only enforceable when we know we are on loopback:
+  // a container bound to 0.0.0.0 is legitimately reached as "localhost", a LAN
+  // IP or a compose service name, and must not be broken here.
+  const hostHeader = typeof req.headers.host === "string" ? req.headers.host.trim() : "";
+  const hostname = hostHeader.replace(/:\d+$/, "");
+  if (opts.allowedHosts.size) {
+    if (
+      !opts.allowedHosts.has(hostHeader.toLowerCase()) &&
+      !opts.allowedHosts.has(hostname.toLowerCase())
+    ) {
+      return {
+        status: 403,
+        message: `Refusing request with Host "${hostHeader}": not in PPQ_ALLOWED_HOSTS.`,
+      };
+    }
+  } else if (opts.enforceHost) {
+    if (hostname && !isLoopbackHostname(hostname)) {
+      return {
+        status: 403,
+        message:
+          `Refusing request with Host "${hostHeader}": this proxy is bound to loopback ` +
+          `and only answers to localhost / 127.0.0.1.`,
+      };
+    }
+  }
+  // NOTE: bound to a network interface with no PPQ_ALLOWED_HOSTS, no Host check
+  // is possible without breaking the container/LAN names such a deployment is
+  // legitimately reached by, so DNS rebinding stays open there. Operators who
+  // publish the port should set PPQ_ALLOWED_HOSTS; see README and issue #23.
+
+  // 2. Origin — present on every cross-site browser POST (plain form
+  // submissions included) and never sent by curl, the OpenAI/Anthropic SDKs or
+  // Claude Code, so rejecting it costs legitimate clients nothing. Non-web
+  // schemes are tolerated by default: Electron-based desktop clients issue
+  // requests from a renderer and attach origins like "app://." or "null".
+  // Tolerating those is safe because they cannot read a response (no CORS
+  // headers) and cannot send JSON without a preflight that now fails.
+  const origin = typeof req.headers.origin === "string" ? req.headers.origin.trim() : "";
+  if (origin && !opts.allowedOrigins.has(origin) && !isSameOrigin(origin, req)) {
+    if (isWebOrigin(origin) || opts.strictOrigin) {
+      return {
+        status: 403,
+        message:
+          `Refusing cross-origin request from ${origin}. If this is your own page, ` +
+          `add the origin to PPQ_ALLOWED_ORIGINS.`,
+      };
+    }
+  }
+
+  // 3. Content-Type. Any Origin at all means a browser sent this, and a browser
+  // can only reach application/json by way of a preflight, which now fails for
+  // anything unallowlisted. Requiring JSON whenever an Origin is present
+  // therefore closes the case a content-type denylist alone does not: a
+  // sandboxed iframe has an opaque origin (`Origin: null`, tolerated in step 2
+  // for Electron's sake) and can POST a Blob carrying NO Content-Type header at
+  // all via `mode: "no-cors"` — neither form-shaped nor JSON. That reached
+  // JSON.parse and spent the user's balance blind. Requests with no Origin are
+  // not browsers, so `curl -d` and other CLI habits keep working.
+  if (req.method === "POST") {
+    const ct = contentTypeOf(req);
+    if (FORM_CONTENT_TYPES.includes(ct)) {
+      return {
+        status: 415,
+        message: `Content-Type "${ct}" is not accepted. Send Content-Type: application/json.`,
+      };
+    }
+    if ((opts.requireJson || origin) && ct !== "application/json") {
+      return {
+        status: 415,
+        message: `This endpoint requires Content-Type: application/json (got "${ct || "none"}").`,
+      };
+    }
+  }
+
+  return null;
+}
+
 // ─── Proxy server ────────────────────────────────────────────────────────────
 
 export async function startProxy(config: ProxyConfig, logger: Logger): Promise<ProxyHandle> {
@@ -312,6 +515,23 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
   const apiBase = config.apiBase || DEFAULT_API_BASE;
   const host = config.host || "127.0.0.1";
   const keyStore = new KeyStore(config.apiKey, config.dataDir, logger);
+  const allowedOrigins = new Set((config.allowedOrigins || []).map((o) => o.trim()).filter(Boolean));
+  const allowedHosts = new Set(
+    (config.allowedHosts || []).map((h) => h.trim().toLowerCase()).filter(Boolean)
+  );
+  // Host validation only applies when we actually are on loopback (see guardRequest).
+  const bindIsLoopback = isLoopbackHostname(host);
+  if (allowedOrigins.size) {
+    logger.info(`Browser origins allowed: ${[...allowedOrigins].join(", ")}`);
+  }
+  if (allowedHosts.size) {
+    logger.info(`Host header restricted to: ${[...allowedHosts].join(", ")}`);
+  } else if (!bindIsLoopback) {
+    logger.info(
+      "Bound to a network interface without PPQ_ALLOWED_HOSTS — set it to the hostname " +
+        "clients use if this port is reachable from an untrusted network."
+    );
+  }
 
   // Dynamic import to avoid loading at module level
   const { SecureClient: SC } = await import("tinfoil");
@@ -442,21 +662,52 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
   }
 
   const server = http.createServer(async (req, res) => {
-    // CORS headers
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-Tool-Id"
-    );
+    // CORS headers are sent ONLY to an explicitly allowlisted origin. Local
+    // programs send no Origin and never needed them, and the status page is
+    // same-origin. The former wildcard handed every website the user visits a
+    // funded, readable AI endpoint (issue #28).
+    const reqOrigin = typeof req.headers.origin === "string" ? req.headers.origin.trim() : "";
+    if (reqOrigin && allowedOrigins.has(reqOrigin)) {
+      res.setHeader("Access-Control-Allow-Origin", reqOrigin);
+      res.setHeader("Vary", "Origin");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tool-Id");
+    }
 
     if (req.method === "OPTIONS") {
+      // Unknown origins get no CORS headers, so the preflight fails closed and
+      // the browser never sends the real request.
       res.writeHead(204);
       res.end();
       return;
     }
 
     const url = new URL(req.url || "/", `http://127.0.0.1:${port}`);
+
+    // The key-write endpoint is only ever called by our own status page, so it
+    // takes the strict variant: JSON only, and no foreign origin of any scheme.
+    const isSetup = url.pathname === "/setup/api-key";
+    const rejection = guardRequest(req, {
+      allowedOrigins,
+      allowedHosts,
+      enforceHost: bindIsLoopback,
+      requireJson: isSetup,
+      strictOrigin: isSetup,
+    });
+    if (rejection) {
+      // Logged rather than silently dropped: if this ever rejects a legitimate
+      // client, the reason needs to be visible without a packet capture.
+      logger.info(
+        `Rejected ${req.method} ${url.pathname} (${rejection.status}): ${rejection.message}`
+      );
+      res.writeHead(rejection.status, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          error: { message: rejection.message, type: "invalid_request_error" },
+        })
+      );
+      return;
+    }
 
     // GET / — human-facing status & setup page
     if (url.pathname === "/" && req.method === "GET") {
@@ -585,7 +836,6 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
         // Forward status and headers
         const responseHeaders: Record<string, string> = {
           "Content-Type": response.headers.get("content-type") || "application/json",
-          "Access-Control-Allow-Origin": "*",
         };
 
         if (parsed.stream) {
@@ -675,17 +925,13 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-cache",
             Connection: "keep-alive",
-            "Access-Control-Allow-Origin": "*",
           });
           await streamAnthropic(response, res, routed.modelId, messageId);
         } else {
           const text = await response.text();
           const oai = JSON.parse(text);
           const anthropicResp = openAIToAnthropicResponse(oai, routed.modelId, messageId);
-          res.writeHead(response.status, {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          });
+          res.writeHead(response.status, { "Content-Type": "application/json" });
           res.end(JSON.stringify(anthropicResp));
         }
       } catch (err: any) {
