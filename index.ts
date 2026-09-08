@@ -22,6 +22,10 @@ interface PluginConfig {
   port?: number;
   apiBase?: string;
   debug?: boolean;
+  /** Browser origins allowed to call the proxy; empty by default (issue #28). */
+  allowedOrigins?: string[];
+  /** Host header values to accept; only needed off loopback (issue #28). */
+  allowedHosts?: string[];
 }
 
 let proxy: ProxyHandle | null = null;
@@ -245,6 +249,8 @@ export default function register(api: any) {
         port: pluginConfig.port || 8787,
         apiBase: pluginConfig.apiBase || "https://api.ppq.ai",
         debug: pluginConfig.debug || false,
+        allowedOrigins: pluginConfig.allowedOrigins || [],
+        allowedHosts: pluginConfig.allowedHosts || [],
       };
 
       try {

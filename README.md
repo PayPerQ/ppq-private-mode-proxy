@@ -75,6 +75,8 @@ const response = await client.chat.completions.create({
 | `HOST` | No | `127.0.0.1` | Bind address (use `0.0.0.0` inside containers) |
 | `PPQ_API_BASE` | No | `https://api.ppq.ai` | PPQ API base URL |
 | `DEBUG` | No | `false` | Set to `true` for verbose logging |
+| `PPQ_ALLOWED_ORIGINS` | No | — | Comma-separated browser origins allowed to call the proxy, e.g. `http://localhost:3000` |
+| `PPQ_ALLOWED_HOSTS` | No | — | Comma-separated `Host` values to accept; set when publishing the port on a network interface |
 
 \*At least one of `PPQ_API_KEY` / `PPQ_DATA_DIR` is required. With
 `PPQ_DATA_DIR` set, the proxy can start without a key: open the status page in
@@ -98,6 +100,43 @@ curl http://127.0.0.1:8787/health   # → {"status":"ok","attestation":true}
 
 The image binds to `0.0.0.0` inside the container and exposes port 8787, with a
 built-in health check against `GET /health`.
+
+**Publish the port carefully.** The proxy spends the API key it holds on behalf
+of whoever calls it, so a published port is a funded AI endpoint for anyone who
+can reach it. `-p 8787:8787` binds every interface; prefer
+`-p 127.0.0.1:8787:8787` unless you intend to serve the network, and never
+expose it to an untrusted one.
+
+If you do publish it, set `PPQ_ALLOWED_HOSTS` to the hostname clients use:
+
+```bash
+docker run -d -e PPQ_API_KEY=sk-your-key \
+  -e PPQ_ALLOWED_HOSTS="ppq-proxy.local:8787" -p 8787:8787 ppq-private-mode
+```
+
+On a loopback bind the proxy already rejects non-loopback `Host` headers, which
+stops a hostile site from pointing a domain it controls at your machine (DNS
+rebinding). That check cannot be applied automatically to a published port,
+because such a deployment is legitimately reached under a container or LAN name
+— naming the expected `Host` restores it.
+
+# Calling the proxy from a browser
+
+Local programs — curl, the OpenAI/Anthropic SDKs, Claude Code, OpenClaw — need
+no configuration and are unaffected by this section.
+
+Web pages are different. The proxy holds your API key, so a page that can call
+it can spend your balance; since v0.6.0 it therefore refuses requests carrying
+an `Origin` from a site other than itself, and sends CORS headers only to
+origins you name explicitly:
+
+```bash
+PPQ_ALLOWED_ORIGINS="http://localhost:3000" npx ppq-private-proxy
+```
+
+Only add origins you control. Earlier versions sent
+`Access-Control-Allow-Origin: *`, which let any website a user visited spend
+their credits and read the replies — see issue #28.
 
 # Claude Code usage
 
