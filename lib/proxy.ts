@@ -515,7 +515,25 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
   const apiBase = config.apiBase || DEFAULT_API_BASE;
   const host = config.host || "127.0.0.1";
   const keyStore = new KeyStore(config.apiKey, config.dataDir, logger);
-  const allowedOrigins = new Set((config.allowedOrigins || []).map((o) => o.trim()).filter(Boolean));
+  // Normalized through URL.origin, which applies exactly the serialization a
+  // browser uses in the Origin header: lowercased scheme and host, no trailing
+  // slash, default port dropped. Without this, a configured
+  // "http://LocalHost:3000/" would never match the "http://localhost:3000" the
+  // browser actually sends, and the operator would see an unexplained refusal.
+  const allowedOrigins = new Set(
+    (config.allowedOrigins || [])
+      .map((entry) => {
+        const raw = entry.trim();
+        if (!raw) return "";
+        try {
+          return new URL(raw).origin;
+        } catch {
+          logger.info(`Ignoring malformed entry in allowed origins: "${raw}"`);
+          return "";
+        }
+      })
+      .filter(Boolean)
+  );
   const allowedHosts = new Set(
     (config.allowedHosts || []).map((h) => h.trim().toLowerCase()).filter(Boolean)
   );
@@ -667,9 +685,12 @@ export async function startProxy(config: ProxyConfig, logger: Logger): Promise<P
     // same-origin. The former wildcard handed every website the user visits a
     // funded, readable AI endpoint (issue #28).
     const reqOrigin = typeof req.headers.origin === "string" ? req.headers.origin.trim() : "";
+    // Unconditional: whether CORS headers appear depends on Origin, so a cache
+    // that stored a header-less response could otherwise replay it to an
+    // allowlisted origin and break a legitimate caller.
+    res.setHeader("Vary", "Origin");
     if (reqOrigin && allowedOrigins.has(reqOrigin)) {
       res.setHeader("Access-Control-Allow-Origin", reqOrigin);
-      res.setHeader("Vary", "Origin");
       res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
       res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tool-Id");
     }
