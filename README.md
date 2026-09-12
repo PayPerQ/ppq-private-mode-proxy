@@ -158,14 +158,14 @@ environment variables before launching `claude`:
 export ANTHROPIC_BASE_URL="http://127.0.0.1:8787"
 export ANTHROPIC_AUTH_TOKEN="sk-your-key"   # your PPQ.AI API key
 # Route every Claude Code "model slot" to a private model:
-export ANTHROPIC_MODEL="private/glm-5-2"             # main model
-export ANTHROPIC_SMALL_FAST_MODEL="private/glm-5-2"  # background tasks
+export ANTHROPIC_MODEL="private/glm-5-3"                   # main model
+export ANTHROPIC_SMALL_FAST_MODEL="private/glm-5-3-flash"  # background tasks
 
 claude
 ```
 
-**Use `private/glm-5-2` for Claude Code.** Claude Code drives everything through
-tool calls, and `glm-5-2`, `gpt-oss-120b`, and `llama3-3-70b` all emit tool
+**Use `private/glm-5-3` for Claude Code.** Claude Code drives everything through
+tool calls, and `glm-5-3`, `glm-5-3-flash`, `gpt-oss-120b`, and `llama3-3-70b` all emit tool
 calls correctly through the enclave, and `private/kimi-k3` advertises
 tool-calling support as well. Every request Claude Code makes is end-to-end
 encrypted to the PPQ enclave.
@@ -175,7 +175,7 @@ encrypted to the PPQ enclave.
 ```bash
 curl http://127.0.0.1:8787/v1/messages \
   -H "Content-Type: application/json" \
-  -d '{"model":"private/glm-5-2","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}'
+  -d '{"model":"private/glm-5-3","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}'
 ```
 
 ## How This proxy repo works

@@ -87,10 +87,10 @@ ${keySection}
 <h2>Connect a client</h2>
 <p>OpenAI-compatible clients:</p>
 <pre><code>POST {origin}/v1/chat/completions
-{"model": "private/glm-5-2", "messages": [{"role": "user", "content": "Hello"}]}</code></pre>
+{"model": "private/glm-5-3", "messages": [{"role": "user", "content": "Hello"}]}</code></pre>
 <p>Anthropic-SDK clients (including Claude Code):</p>
 <pre><code>export ANTHROPIC_BASE_URL="{origin}"
-export ANTHROPIC_MODEL="private/glm-5-2"</code></pre>
+export ANTHROPIC_MODEL="private/glm-5-3"</code></pre>
 <p><code>GET /v1/models</code> lists models. <code>GET /health</code> returns JSON status.</p>
 
 <h2>Available models</h2>

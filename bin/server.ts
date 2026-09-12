@@ -88,10 +88,10 @@ console.log("");
 console.log("Use with Claude Code (Anthropic format, POST /v1/messages):");
 console.log(`  export ANTHROPIC_BASE_URL="http://127.0.0.1:${proxy.port}"`);
 console.log(`  export ANTHROPIC_AUTH_TOKEN="$PPQ_API_KEY"`);
-console.log(`  export ANTHROPIC_MODEL="private/glm-5-2"`);
-console.log(`  export ANTHROPIC_SMALL_FAST_MODEL="private/glm-5-2"`);
+console.log(`  export ANTHROPIC_MODEL="private/glm-5-3"`);
+console.log(`  export ANTHROPIC_SMALL_FAST_MODEL="private/glm-5-3-flash"`);
 console.log(`  claude`);
-console.log("  # glm-5-2 / gpt-oss-120b / llama3-3-70b / kimi-k3 support tool calls");
+console.log("  # glm-5-3 / glm-5-3-flash / gpt-oss-120b / llama3-3-70b / kimi-k3 support tool calls");
 console.log("");
 
 // Graceful shutdown
