@@ -1,195 +1,171 @@
-# What are "TEE" AI models?
+# ppq-private-mode
 
-TEE (Trusted Execution Environment) AI models allow users to run AI queries in the cloud and on remote servers without those servers having access to the content of the users' queries. This delivers one of the best AI capability to privacy tradeoffs in the industry currently.
+**End-to-end encrypted access to PPQ.AI models.** A small proxy that runs on
+your machine, verifies the hardware enclave it is about to talk to, and
+encrypts every request before it leaves — so PPQ.AI, and everyone between you
+and the enclave, sees only ciphertext.
 
-# ppq-private-mode: Use PPQ's Private (TEE) AI models via our API and with OpenClaw
+It covers **every model on PPQ**, through two kinds of enclave:
 
-The trick in using private models is that you need to encrypt the content of your request before sending them onto PPQ and its AI provider. With our proxy repo, you encrypt the queries on your machine before they leave -- neither PPQ.AI nor anyone else can read them.
+| You ask for | Where it runs | What is inside the enclave |
+|---|---|---|
+| `private/*` models (Kimi K3, GLM-5.3, gpt-oss, Llama, Gemma, DeepSeek) | **Tinfoil** — AMD SEV-SNP confidential VMs | the model itself: nobody outside the enclave sees your text, ever |
+| Any other model (Claude, GPT, Gemini, Grok, …) | **PPQ's own Nitro enclave** on AWS | our routing code: PPQ is blind, and your text goes from the enclave straight to the model provider |
 
-The repo supports both standalone use cases with your own custom code as well as usage inside of openclaw.
+Point any OpenAI- or Anthropic-compatible client at it. No crypto in your code.
 
-# OpenClaw usage
+## Quick start
 
-For openclaw usage, simply paste in this command to your openclaw chat interface:
-
-```
-Please install this skill to enable private models via PPQ: https://github.com/PayPerQ/ppq-private-mode-proxy/blob/main/skills/private-mode/SKILL.md
-```
-
-In some cases, openclaw's safety guardrails block installation via direct links. In that case, try to paste in the text of the skill file. If issues still persist, create an issue in this repo here to help the community troubleshoot.
-
-# Standalone usage
-
-You can run the proxy directly without OpenClaw and point any OpenAI-compatible client at it.
-
-**Prerequisites:** Node.js 20+ and a PPQ.AI API key from [ppq.ai/api-docs](https://ppq.ai/api-docs).
-
-**Start the proxy:**
+Needs Node.js 20+ and a PPQ.AI API key from [ppq.ai/api-docs](https://ppq.ai/api-docs).
 
 ```bash
 PPQ_API_KEY=sk-your-key npx ppq-private-mode
 ```
 
-The proxy starts on port 8787 and prints a ready message once attestation succeeds.
-
-**Send a request** (standard OpenAI chat completions format):
+The proxy comes up on `http://127.0.0.1:8787` once both enclaves have been
+verified. Then, in OpenAI format:
 
 ```bash
+# A fully private model — runs inside a Tinfoil enclave
 curl http://127.0.0.1:8787/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"private/kimi-k3","messages":[{"role":"user","content":"Hello"}]}'
-```
 
-The proxy bills against `PPQ_API_KEY` by default. To use a different key per request, pass it as a bearer token and the proxy will forward it instead:
-
-```bash
+# A frontier model — routed through PPQ's Nitro enclave, encrypted end to end
 curl http://127.0.0.1:8787/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk-another-key" \
-  -d '{"model":"private/kimi-k3","messages":[{"role":"user","content":"Hello"}]}'
+  -d '{"model":"anthropic/claude-sonnet-5","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
-**Or point any OpenAI SDK at it:**
+Or with any OpenAI SDK:
 
 ```js
 import OpenAI from "openai";
 
-const client = new OpenAI({
-  baseURL: "http://127.0.0.1:8787/v1",
-  apiKey: "unused",
-});
+const client = new OpenAI({ baseURL: "http://127.0.0.1:8787/v1", apiKey: "unused" });
 
 const response = await client.chat.completions.create({
-  model: "private/kimi-k3",
+  model: "private/glm-5-3",          // or "openai/gpt-5.3", "google/gemini-3.7-flash", …
   messages: [{ role: "user", content: "Hello" }],
 });
 ```
 
-**Environment variables:**
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `PPQ_API_KEY` | Yes* | — | Your PPQ.AI API key |
-| `PPQ_DATA_DIR` | No* | — | Directory for persistent config; enables saving the key from the status page |
-| `PORT` | No | `8787` | Local proxy port |
-| `HOST` | No | `127.0.0.1` | Bind address (use `0.0.0.0` inside containers) |
-| `PPQ_API_BASE` | No | `https://api.ppq.ai` | PPQ API base URL |
-| `DEBUG` | No | `false` | Set to `true` for verbose logging |
-| `PPQ_ALLOWED_ORIGINS` | No | — | Comma-separated browser origins allowed to call the proxy, e.g. `http://localhost:3000` |
-| `PPQ_ALLOWED_HOSTS` | No | — | Comma-separated `Host` values to accept; set when publishing the port on a network interface |
-
-\*At least one of `PPQ_API_KEY` / `PPQ_DATA_DIR` is required. With
-`PPQ_DATA_DIR` set, the proxy can start without a key: open the status page in
-a browser and save the key there — it persists to `<dir>/config.json` and takes
-effect immediately.
-
-# Status page
-
-`GET /` serves a human-facing status page: enclave attestation state, API key
-status, connection snippets, and the model list. When `PPQ_DATA_DIR` is set it
-also offers the API-key setup form (the saved key is never echoed back).
-`GET /health` remains machine-readable JSON.
-
-# Docker usage
+The proxy bills `PPQ_API_KEY` by default. To bill a different key per request,
+send it as a bearer token and the proxy forwards that one instead:
 
 ```bash
-docker build -t ppq-private-mode .
-docker run -d -e PPQ_API_KEY=sk-your-key -p 8787:8787 ppq-private-mode
-curl http://127.0.0.1:8787/health   # → {"status":"ok","attestation":true}
+curl http://127.0.0.1:8787/v1/chat/completions \
+  -H "Authorization: Bearer sk-another-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"private/kimi-k3","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
-The image binds to `0.0.0.0` inside the container and exposes port 8787, with a
-built-in health check against `GET /health`.
+Open `http://127.0.0.1:8787` in a browser for a status page (attestation state,
+key status, connection snippets, model list).
 
-**Publish the port carefully.** The proxy spends the API key it holds on behalf
-of whoever calls it, so a published port is a funded AI endpoint for anyone who
-can reach it. `-p 8787:8787` binds every interface; prefer
-`-p 127.0.0.1:8787:8787` unless you intend to serve the network, and never
-expose it to an untrusted one.
+## Claude Code
 
-If you do publish it, set `PPQ_ALLOWED_HOSTS` to the hostname clients use:
+The proxy also speaks the Anthropic Messages format at `POST /v1/messages` —
+tool calls and streaming included — so Claude Code (or any Anthropic SDK
+client) can run through it unchanged.
 
 ```bash
-docker run -d -e PPQ_API_KEY=sk-your-key \
-  -e PPQ_ALLOWED_HOSTS="ppq-proxy.local:8787" -p 8787:8787 ppq-private-mode
-```
-
-On a loopback bind the proxy already rejects non-loopback `Host` headers, which
-stops a hostile site from pointing a domain it controls at your machine (DNS
-rebinding). That check cannot be applied automatically to a published port,
-because such a deployment is legitimately reached under a container or LAN name
-— naming the expected `Host` restores it.
-
-# Calling the proxy from a browser
-
-Local programs — curl, the OpenAI/Anthropic SDKs, Claude Code, OpenClaw — need
-no configuration and are unaffected by this section.
-
-Web pages are different. The proxy holds your API key, so a page that can call
-it can spend your balance; since v0.6.0 it therefore refuses requests carrying
-an `Origin` from a site other than itself, and sends CORS headers only to
-origins you name explicitly:
-
-```bash
-PPQ_ALLOWED_ORIGINS="http://localhost:3000" npx ppq-private-proxy
-```
-
-Only add origins you control. Earlier versions sent
-`Access-Control-Allow-Origin: *`, which let any website a user visited spend
-their credits and read the replies — see issue #28.
-
-# Claude Code usage
-
-Claude Code (and any other Anthropic-SDK client) speaks the Anthropic Messages
-format, not the OpenAI format. The proxy exposes a native Anthropic endpoint at
-`POST /v1/messages` that translates to/from the encrypted enclave for you —
-including tool calls and streaming — so you can point Claude Code straight at it.
-
-**1. Start the proxy** (leave it running in its own terminal):
-
-```bash
+# terminal 1
 PPQ_API_KEY=sk-your-key npx ppq-private-mode
-```
 
-**2. Point Claude Code at the proxy** and pick a private model. Set these
-environment variables before launching `claude`:
-
-```bash
+# terminal 2
 export ANTHROPIC_BASE_URL="http://127.0.0.1:8787"
-export ANTHROPIC_AUTH_TOKEN="sk-your-key"   # your PPQ.AI API key
-# Route every Claude Code "model slot" to a private model:
-export ANTHROPIC_MODEL="private/glm-5-3"                   # main model
+export ANTHROPIC_AUTH_TOKEN="sk-your-key"               # your PPQ.AI API key
+export ANTHROPIC_MODEL="private/glm-5-3"                # main model
 export ANTHROPIC_SMALL_FAST_MODEL="private/glm-5-3-flash"  # background tasks
-
 claude
 ```
 
-**Use `private/glm-5-3` for Claude Code.** Claude Code drives everything through
-tool calls, and `glm-5-3`, `glm-5-3-flash`, `gpt-oss-120b`, and `llama3-3-70b` all emit tool
-calls correctly through the enclave, and `private/kimi-k3` advertises
-tool-calling support as well. Every request Claude Code makes is end-to-end
-encrypted to the PPQ enclave.
+Any model works in either slot — a `private/*` model for a fully private
+session, or a frontier model (`anthropic/claude-opus-5`, …) through the Nitro
+enclave. Claude Code drives everything through tool calls; of the `private/*`
+models, `glm-5-3`, `glm-5-3-flash`, `gpt-oss-120b`, `llama3-3-70b` and `kimi-k3`
+emit them correctly.
 
-**Verify the endpoint directly** (Anthropic Messages format):
+## How it works
 
-```bash
-curl http://127.0.0.1:8787/v1/messages \
-  -H "Content-Type: application/json" \
-  -d '{"model":"private/glm-5-3","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}'
+```
+your app ──▶ localhost:8787 ──▶ verify attestation ──▶ encrypt (HPKE) ──▶ PPQ.AI ──▶ enclave
+                                                                         sees only
+                                                                         ciphertext
 ```
 
-## How This proxy repo works
+1. **Verify.** At startup the proxy fetches each enclave's hardware attestation
+   and checks it: Tinfoil's against the code measurement in Tinfoil's signed
+   release, PPQ's against the `PCR0` published in
+   [`ppq-enclave-proxy`](https://github.com/PayPerQ/ppq-enclave-proxy/blob/main/attestation/published-pcr.json)
+   (fetched fresh on every start, so enclave releases never leave a stale pin).
+   If verification fails, that backend is disabled — nothing is sent to an
+   enclave that did not prove what it is running.
+2. **Encrypt.** Each request body is sealed with HPKE (RFC 9180) to the public
+   key the attestation document commits to — a key that exists only inside the
+   verified enclave.
+3. **Forward.** PPQ.AI routes the ciphertext to the enclave. It reads your API
+   key from the headers for billing and nothing else.
+4. **Answer.** The enclave decrypts, runs the request, and encrypts the
+   response back to your proxy, which decrypts it on your machine.
 
-The code in this runs a local proxy on your machine (port 8787) that:
+The two backends differ in one important way:
 
-1. **Verifies the enclave** -- performs hardware attestation to confirm it's talking to a genuine secure enclave, not an impersonator
-2. **Encrypts your request** -- uses HPKE (RFC 9180) to encrypt the entire request body before it leaves your machine
-3. **Sends the encrypted blob** -- PPQ.AI routes the encrypted data to the secure enclave. PPQ.AI only sees ciphertext.
-4. **Enclave processes privately** -- the enclave decrypts your query, runs the AI model, and re-encrypts the response
-5. **Your proxy decrypts** -- the response is decrypted locally on your machine
+- **Tinfoil (`private/*`)**: the model runs *inside* the enclave. Your text is
+  never in the clear outside that hardware boundary.
+- **PPQ's Nitro enclave (everything else)**: the enclave holds PPQ's routing
+  logic and provider keys, not the model. Your text is decrypted inside it and
+  sent over TLS to the model's provider (Anthropic, OpenAI, Google, …) —
+  which necessarily sees it, to run inference. What the enclave guarantees is
+  that **PayPerQ cannot**: the code is public, its measurement is published,
+  and your proxy checks that measurement before sending a byte. Details, the
+  threat model, and how to verify it yourself:
+  [PayPerQ/ppq-enclave-proxy](https://github.com/PayPerQ/ppq-enclave-proxy).
 
-PPQ.AI handles billing via HTTP headers (your API key), so they never need to see the actual content of your queries.
+**What neither protects:** metadata. PPQ.AI sees which account made a request,
+when, for which model, and how many tokens it used — that is how billing works.
+It cannot read the content.
+
+## Models
+
+- `private/*` — the Tinfoil catalog built into the proxy; `GET /v1/models`
+  lists them. Currently `kimi-k3`, `gpt-oss-120b`, `llama3-3-70b`, `glm-5-3`,
+  `glm-5-3-flash`, `gemma4-31b`, `deepseek-v4-flash`, `deepseek-v4-1-flash`.
+  Omitting `model` defaults to `private/kimi-k3`.
+- Everything else — any id from [ppq.ai/models](https://ppq.ai/models), passed
+  through verbatim to the Nitro enclave. (These are not yet included in
+  `GET /v1/models`.)
+
+## Configuration
+
+| Variable | Default | Description |
+|---|---|---|
+| `PPQ_API_KEY` | — | Your PPQ.AI API key. Required unless `PPQ_DATA_DIR` is set |
+| `PPQ_DATA_DIR` | — | Directory for persistent config. With it set, the proxy can start without a key and you save one from the status page (`<dir>/config.json`) |
+| `PORT` | `8787` | Local port |
+| `HOST` | `127.0.0.1` | Bind address (`0.0.0.0` inside containers — see [deployment](docs/deployment.md)) |
+| `PPQ_API_BASE` | `https://api.ppq.ai` | PPQ API base URL (Tinfoil path) |
+| `PPQ_ENCLAVE_URL` | `https://enclave.ppq.ai` | PPQ Nitro enclave URL |
+| `PPQ_ENCLAVE_PCR0` | published value | Override the expected enclave measurement |
+| `PPQ_ALLOWED_ORIGINS` | — | Browser origins allowed to call the proxy |
+| `PPQ_ALLOWED_HOSTS` | — | `Host` values to accept when published on a network |
+| `DEBUG` | `false` | Verbose logging |
+
+## More
+
+- **[Docker, network exposure and browser access](docs/deployment.md)** — the
+  container image, publishing the port safely, `PPQ_ALLOWED_HOSTS` /
+  `PPQ_ALLOWED_ORIGINS`.
+- **[OpenClaw](skills/private-mode/SKILL.md)** — paste into the OpenClaw chat:
+  *"Please install this skill to enable private models via PPQ:
+  https://github.com/PayPerQ/ppq-private-mode-proxy/blob/main/skills/private-mode/SKILL.md"*
+  (if OpenClaw's guardrails block the link, paste the file's text instead).
+- **[Verifying PPQ's enclave yourself](https://github.com/PayPerQ/ppq-enclave-proxy#verifying-the-enclave)**
+  — reproducible builds, the published measurement, the reference verifier.
 
 ## About
 
-PPQ.AI provides pay-per-query AI inference with no subscriptions. Private models run inside secure enclaves with hardware-enforced memory encryption. Learn more at https://ppq.ai
+[PPQ.AI](https://ppq.ai) is pay-per-query AI inference with no subscriptions
+and no account required. Private models run inside secure enclaves with
+hardware-enforced memory encryption. MIT licensed.
