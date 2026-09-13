@@ -55,10 +55,10 @@ export interface ProxyConfig {
    */
   dataDir?: string;
   /**
-   * Optional Nitro-enclave backend (PHASED / dormant by default). When BOTH of
-   * these are set, models that are NOT `private/*` are routed through the
-   * attested PPQ Nitro enclave (the OpenRouter catalog). When either is unset —
-   * the default — the proxy is Tinfoil-only and behaves exactly as before.
+   * Nitro-enclave backend overrides. ON by default since 0.6.0: models that are
+   * NOT `private/*` route through the attested PPQ Nitro enclave at
+   * DEFAULT_ENCLAVE_URL with the PCR0 read from the published record. Set these
+   * to point at a different enclave / pin (a dev enclave, a pre-accepted build).
    */
   enclaveUrl?: string;
   enclavePcr0?: string;

@@ -55,8 +55,8 @@ const port = parseInt(process.env.PORT || "8787", 10);
 const host = process.env.HOST || "127.0.0.1";
 const apiBase = process.env.PPQ_API_BASE || "https://api.ppq.ai";
 const debug = process.env.DEBUG === "true";
-// PHASED / dormant: the Nitro enclave backend is used only when BOTH are set.
-// Unset (default) => Tinfoil-only, exactly as before.
+// Nitro enclave backend — ON by default since 0.6.0 (published prod enclave,
+// PCR0 resolved from the published record at startup). These only override.
 const enclaveUrl = process.env.PPQ_ENCLAVE_URL;
 const enclavePcr0 = process.env.PPQ_ENCLAVE_PCR0;
 // Opt-in only. Without this the proxy serves local programs and its own status
