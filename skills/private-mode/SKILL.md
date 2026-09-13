@@ -6,7 +6,7 @@ user-invocable: true
 
 # PPQ.AI Private Mode -- Configure Encrypted Models
 
-This skill installs and configures OpenClaw to use PPQ.AI's end-to-end encrypted models.
+This skill installs and configures OpenClaw to use PPQ.AI models through a local encryption proxy, so PPQ.AI cannot read the user's prompts. Open-weight `private/*` models run inside a hardware enclave (end-to-end encrypted); proprietary models (Claude, GPT, Gemini, …) are decrypted inside PPQ's enclave and forwarded to the model's provider, who does see them.
 
 ## Step 1: Install the plugin
 
