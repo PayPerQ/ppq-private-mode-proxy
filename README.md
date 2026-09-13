@@ -5,12 +5,16 @@ your machine, verifies the hardware enclave it is about to talk to, and
 encrypts every request before it leaves — so PPQ.AI, and everyone between you
 and the enclave, sees only ciphertext.
 
-It covers **every model on PPQ**, through two kinds of enclave:
+It covers **every model on PPQ**, by one of two paths depending on the model
+you name:
 
-| You ask for | Where it runs | What is inside the enclave |
-|---|---|---|
-| `private/*` models (Kimi K3, GLM-5.3, gpt-oss, Llama, Gemma, DeepSeek) | **Tinfoil** — AMD SEV-SNP confidential VMs | the model itself: nobody outside the enclave sees your text, ever |
-| Any other model (Claude, GPT, Gemini, Grok, …) | **PPQ's own Nitro enclave** on AWS | our routing code: PPQ is blind, and your text goes from the enclave straight to the model provider |
+| | You ask for | Where it runs | What is inside the enclave |
+|---|---|---|---|
+| **Path 1** | `private/*` models (Kimi K3, GLM-5.3, gpt-oss, Llama, Gemma, DeepSeek) | **Tinfoil** — AMD SEV-SNP confidential VMs | the model itself: nobody outside the enclave sees your text, ever |
+| **Path 2** | any other model (Claude, GPT, Gemini, Grok, …) | **PPQ's own Nitro enclave** on AWS | our routing code: PPQ is blind, and your text goes from the enclave straight to the model provider |
+
+The two paths give different guarantees — [How it works](#how-it-works--two-paths)
+spells each one out.
 
 Point any OpenAI- or Anthropic-compatible client at it. No crypto in your code.
 
@@ -26,12 +30,12 @@ The proxy comes up on `http://127.0.0.1:8787` once both enclaves have been
 verified. Then, in OpenAI format:
 
 ```bash
-# A fully private model — runs inside a Tinfoil enclave
+# Path 1 — a fully private model, runs inside a Tinfoil enclave
 curl http://127.0.0.1:8787/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"private/kimi-k3","messages":[{"role":"user","content":"Hello"}]}'
 
-# A frontier model — routed through PPQ's Nitro enclave, encrypted end to end
+# Path 2 — a frontier model, encrypted to PPQ's Nitro enclave
 curl http://127.0.0.1:8787/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"anthropic/claude-sonnet-5","messages":[{"role":"user","content":"Hello"}]}'
@@ -81,51 +85,86 @@ export ANTHROPIC_SMALL_FAST_MODEL="private/glm-5-3-flash"  # background tasks
 claude
 ```
 
-Any model works in either slot — a `private/*` model for a fully private
-session, or a frontier model (`anthropic/claude-opus-5`, …) through the Nitro
-enclave. Claude Code drives everything through tool calls; of the `private/*`
+Any model works in either slot — a `private/*` model (Path 1) for a fully
+private session, or a frontier model such as `anthropic/claude-opus-5`
+(Path 2) through PPQ's Nitro enclave. Claude Code drives everything through tool calls; of the `private/*`
 models, `glm-5-3`, `glm-5-3-flash`, `gpt-oss-120b`, `llama3-3-70b` and `kimi-k3`
 emit them correctly.
 
-## How it works
+## How it works — two paths
+
+The proxy does the same two things for every request: **verify** the enclave
+it is about to talk to, then **encrypt** the request to that enclave and
+nothing else. Which enclave depends on the model you name. The two paths are
+different products with different guarantees, so they are described
+separately.
+
+### Path 1 — `private/*` models: the model runs inside a Tinfoil enclave
 
 ```
-your app ──▶ localhost:8787 ──▶ verify attestation ──▶ encrypt (HPKE) ──▶ PPQ.AI ──▶ enclave
-                                                                         sees only
-                                                                         ciphertext
+your app ─▶ proxy ══ HPKE ══▶ api.ppq.ai/private ══▶ Tinfoil enclave (AMD SEV-SNP)
+             │ verifies       relays ciphertext,      decrypts, RUNS THE MODEL,
+             │ Tinfoil's      bills your key           encrypts the reply
+             │ attestation
 ```
 
-1. **Verify.** At startup the proxy fetches each enclave's hardware attestation
-   and checks it: Tinfoil's against the code measurement in Tinfoil's signed
-   release, PPQ's against the `PCR0` published in
-   [`ppq-enclave-proxy`](https://github.com/PayPerQ/ppq-enclave-proxy/blob/main/attestation/published-pcr.json)
-   (fetched fresh on every start, so enclave releases never leave a stale pin).
-   If verification fails, that backend is disabled — nothing is sent to an
-   enclave that did not prove what it is running.
-2. **Encrypt.** Each request body is sealed with HPKE (RFC 9180) to the public
-   key the attestation document commits to — a key that exists only inside the
-   verified enclave.
-3. **Forward.** PPQ.AI routes the ciphertext to the enclave. It reads your API
-   key from the headers for billing and nothing else.
-4. **Answer.** The enclave decrypts, runs the request, and encrypts the
-   response back to your proxy, which decrypts it on your machine.
+- **Who can read your text:** you, and the model running inside the enclave.
+  Not PPQ. Not Tinfoil's operators. Not the cloud it runs on.
+- **What is verified:** Tinfoil's hardware attestation, checked against the
+  code measurement in Tinfoil's signed release (`tinfoilsh/confidential-model-router`).
+- **What PPQ does:** relays ciphertext and bills the API key in the headers.
 
-The two backends differ in one important way:
+This is the stronger guarantee — the whole inference happens inside the
+enclave — and it is available for the open-weight models Tinfoil hosts.
 
-- **Tinfoil (`private/*`)**: the model runs *inside* the enclave. Your text is
-  never in the clear outside that hardware boundary.
-- **PPQ's Nitro enclave (everything else)**: the enclave holds PPQ's routing
-  logic and provider keys, not the model. Your text is decrypted inside it and
-  sent over TLS to the model's provider (Anthropic, OpenAI, Google, …) —
-  which necessarily sees it, to run inference. What the enclave guarantees is
-  that **PayPerQ cannot**: the code is public, its measurement is published,
-  and your proxy checks that measurement before sending a byte. Details, the
-  threat model, and how to verify it yourself:
-  [PayPerQ/ppq-enclave-proxy](https://github.com/PayPerQ/ppq-enclave-proxy).
+### Path 2 — every other model: PPQ's routing runs inside a Nitro enclave
 
-**What neither protects:** metadata. PPQ.AI sees which account made a request,
+```
+your app ─▶ proxy ══ HPKE ══▶ enclave.ppq.ai ══▶ PPQ Nitro enclave ──TLS──▶ model provider
+             │ verifies       load balancer,       decrypts, picks the        (Anthropic,
+             │ PPQ's          forwards bytes       upstream, holds the keys,   OpenAI, …)
+             │ attestation                         encrypts the reply          sees plaintext
+```
+
+- **Who can read your text:** you, the enclave, and the model's provider —
+  Anthropic, OpenAI, Google, xAI, or whoever serves that model. A frontier
+  model cannot run inside an enclave, so its provider necessarily sees the
+  prompt. **PPQ does not.**
+- **What is verified:** AWS Nitro's hardware attestation, checked against the
+  `PCR0` measurement PPQ publishes in
+  [`ppq-enclave-proxy`](https://github.com/PayPerQ/ppq-enclave-proxy/blob/main/attestation/published-pcr.json).
+  The enclave's code is public and its build is reproducible, so anyone can
+  confirm that measurement corresponds to that code. The proxy fetches the
+  published value on every start, so PPQ's enclave releases never leave it
+  with a stale pin.
+- **What PPQ does:** operates the enclave and the servers around it — and can
+  read none of what passes through. The enclave settles billing (token counts,
+  cost) to PPQ's backend; the content never leaves the enclave except to the
+  provider.
+
+This is the weaker guarantee — "PayPerQ is blind," not "everyone is blind" —
+and it is what makes Claude, GPT, Gemini and the rest usable without trusting
+PPQ with your prompts. Threat model, known gaps, and how to verify it yourself:
+[PayPerQ/ppq-enclave-proxy](https://github.com/PayPerQ/ppq-enclave-proxy).
+
+### Side by side
+
+| | Path 1 — `private/*` | Path 2 — everything else |
+|---|---|---|
+| Enclave | Tinfoil (AMD SEV-SNP) | PPQ Nitro enclave (AWS) |
+| What runs inside | the model | PPQ's routing + provider keys |
+| Sees your prompt | you, the enclave | you, the enclave, the model provider |
+| PPQ sees | ciphertext | ciphertext |
+| Verified against | Tinfoil's signed release | PPQ's published `PCR0` (public, reproducible build) |
+| Models | the Tinfoil catalog below | anything on [ppq.ai/models](https://ppq.ai/models) |
+
+**What neither path hides:** metadata. PPQ sees which account made a request,
 when, for which model, and how many tokens it used — that is how billing works.
-It cannot read the content.
+It cannot read the content on either path.
+
+If verification of either enclave fails at startup, that path is disabled and
+requests for its models get an error. Nothing is ever sent to an enclave that
+did not prove what it is running.
 
 ## Models
 
