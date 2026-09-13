@@ -73,9 +73,12 @@ export function renderStatusPage(state: StatusPageState): string {
 </head>
 <body>
 <h1>🔥 PPQ Private Mode</h1>
-<p>End-to-end encrypted proxy for PPQ.AI private (TEE) AI models. Requests are encrypted
-here and only decrypted inside a hardware-secured enclave — nobody in between, PPQ.AI
-included, can read them.</p>
+<p>Local encryption proxy for PPQ.AI. Requests are encrypted here and decrypted only
+inside a verified hardware enclave — nobody in between, PPQ.AI included, can read them.</p>
+<p><strong>Two paths.</strong> <code>private/*</code> models run <em>inside</em> the enclave:
+end-to-end encrypted, no one else sees your prompt. Every other model (Claude, GPT,
+Gemini, …) is decrypted in the enclave and forwarded to its provider, who sees it in
+full — what the enclave guarantees is that PPQ.AI does not.</p>
 
 <h2>Enclave attestation</h2>
 ${attestation}

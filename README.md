@@ -1,9 +1,21 @@
 # ppq-private-mode
 
-**End-to-end encrypted access to PPQ.AI models.** A small proxy that runs on
-your machine, verifies the hardware enclave it is about to talk to, and
-encrypts every request before it leaves — so PPQ.AI, and everyone between you
-and the enclave, sees only ciphertext.
+**Use PPQ.AI models without PPQ.AI seeing your prompts.** A small proxy that
+runs on your machine, verifies the hardware enclave it is about to talk to, and
+encrypts every request to that enclave before it leaves — so PPQ.AI, and
+everyone between you and the enclave, sees only ciphertext.
+
+**Read this before relying on it.** How far the encryption reaches depends on
+the model:
+
+- **Open-weight `private/*` models** run *inside* the enclave. Your prompt is
+  end-to-end encrypted: no one but you and the enclave ever sees it.
+- **Proprietary models — Claude, GPT, Gemini, Grok, …** cannot run inside an
+  enclave. The enclave decrypts your prompt and sends it to the model's
+  provider (Anthropic, OpenAI, Google, xAI), **who sees it in full**, exactly as
+  they would if you called them directly. What you gain is that PPQ.AI — the
+  company billing you — cannot. This is *not* end-to-end encryption to the
+  model, and the page below never claims it is.
 
 It covers **every model on PPQ**, by one of two paths depending on the model
 you name:

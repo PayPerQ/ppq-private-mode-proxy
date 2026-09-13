@@ -5,7 +5,7 @@
   "engines": {
     "node": ">=20"
   },
-  "description": "End-to-end encrypted AI proxy for PPQ.AI private models. Works standalone or as an OpenClaw plugin.",
+  "description": "Local encryption proxy for PPQ.AI. Prompts are encrypted to a verified hardware enclave so PPQ.AI cannot read them; open-weight private/* models run inside the enclave, proprietary models are forwarded to their provider. Standalone or OpenClaw plugin.",
   "license": "MIT",
   "openclaw": {
     "extensions": [

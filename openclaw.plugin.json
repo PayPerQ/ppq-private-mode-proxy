@@ -1,7 +1,7 @@
 {
   "id": "ppq-private-mode",
   "name": "PPQ Private Mode",
-  "description": "End-to-end encrypted AI inference via PPQ.AI. Runs a local proxy that encrypts your queries before they leave your machine.",
+  "description": "Encrypted AI inference via PPQ.AI. Runs a local proxy that encrypts your queries to a verified hardware enclave before they leave your machine, so PPQ.AI cannot read them. private/* models run inside the enclave; proprietary models are forwarded to their provider.",
   "version": "0.1.0",
   "configSchema": {
     "type": "object",
