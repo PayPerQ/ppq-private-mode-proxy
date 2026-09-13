@@ -113,6 +113,8 @@ separately.
 
 ### Path 1 — `private/*` models: the model runs inside a Tinfoil enclave
 
+<img src="docs/img/path1-private-models.svg" alt="Path 1: your app → proxy (verifies, encrypts) → PPQ.AI relays ciphertext → Tinfoil enclave decrypts and runs the model. Only you and the enclave can read the prompt." width="100%">
+
 ```
 your app ─▶ proxy ══ HPKE ══▶ api.ppq.ai/private ══▶ Tinfoil enclave (AMD SEV-SNP)
              │ verifies       relays ciphertext,      decrypts, RUNS THE MODEL,
@@ -130,6 +132,8 @@ This is the stronger guarantee — the whole inference happens inside the
 enclave — and it is available for the open-weight models Tinfoil hosts.
 
 ### Path 2 — every other model: PPQ's routing runs inside a Nitro enclave
+
+<img src="docs/img/path2-nitro-enclave.svg" alt="Path 2: your app → proxy (verifies, encrypts) → PPQ.AI forwards bytes → PPQ Nitro enclave decrypts and picks the upstream → model provider over TLS, which sees the plaintext. PPQ.AI cannot." width="100%">
 
 ```
 your app ─▶ proxy ══ HPKE ══▶ enclave.ppq.ai ══▶ PPQ Nitro enclave ──TLS──▶ model provider
