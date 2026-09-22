@@ -15,7 +15,7 @@
   <rect x="0.5" y="0.5" width="1039" height="299" rx="14" fill="#ffffff" stroke="#d9dde3"/>
 
   <!-- title -->
-  <text x="28" y="40" font-size="20" font-weight="700" fill="#111827">Path 2 — every other model (Claude, GPT, Gemini, Grok, …)</text>
+  <text x="28" y="40" font-size="20" font-weight="700" fill="#111827">Every other model (Claude, GPT, Gemini, Grok, …)</text>
   <text x="28" y="64" font-size="14" fill="#4b5563">PPQ's routing runs inside the enclave; the model's provider still sees your prompt. PPQ.AI does not.</text>
 
   <!-- encrypted zone band -->
