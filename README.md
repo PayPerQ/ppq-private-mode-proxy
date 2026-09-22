@@ -1,4 +1,4 @@
-# ppq-private-mode
+# PPQ Privacy Verifier
 
 A proxy that runs on your machine and encrypts your AI queries before they
 leave it. It does two things, depending on the model you ask for.
