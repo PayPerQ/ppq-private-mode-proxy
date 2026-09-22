@@ -12,7 +12,7 @@
   <rect x="0.5" y="0.5" width="1039" height="299" rx="14" fill="#ffffff" stroke="#d9dde3"/>
 
   <!-- title -->
-  <text x="28" y="40" font-size="20" font-weight="700" fill="#111827"><tspan font-family="ui-monospace, SFMono-Regular, Menlo, monospace">private/*</tspan> models</text>
+  <text x="28" y="40" font-size="20" font-weight="700" fill="#111827">Path 1 — <tspan font-family="ui-monospace, SFMono-Regular, Menlo, monospace">private/*</tspan> models</text>
   <text x="28" y="64" font-size="14" fill="#4b5563">The model itself runs inside the enclave. Only you and the enclave ever see your prompt.</text>
 
   <!-- encrypted zone band -->
